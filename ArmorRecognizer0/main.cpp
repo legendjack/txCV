@@ -1,10 +1,10 @@
-/* version 1.0
- * 如果只有灯条没有装甲，则发送灯条的位置
+/* version 1.1
+ * 修复BUG：没有检测到装甲，云台就会立刻归位的BUG
  */
 
 #include <stdio.h>
-#include <opencv2/opencv.hpp>
 #include <iostream>
+#include <opencv2/opencv.hpp>
 #include "functions.h"
 #include "getConfig.h"
 #include "serialsom.h"
@@ -14,8 +14,8 @@
 #define WINNAME1 "Binary Image"
 #define MaxContourArea 450		// 面积大于该值的轮廓不是装甲的灯条
 #define MinContourArea 15		// 面积小于该值的轮廓不是装甲的灯条
-#define Width 640				// 视频宽
-#define Height 480				// 视频高
+#define Width	640				// 视频宽
+#define Height	480				// 视频高
 #define DEBUG
 
 // 全局变量
@@ -36,7 +36,7 @@ int frameCount = 150;
 int lightsCount = 0;			// 图像中装甲灯条的数量
 bool findArmor;
 bool sended;					// 串口信息是否已经发送
-Point targetPoint(340, 226);
+Point targetPoint(338, 248);
 Point centerOfArmor;
 
 // 计算直方图需要的参数
@@ -104,8 +104,6 @@ int main()
 	while (true)
 	{
 		sended = false;
-		yawOut = 250;
-		pitchOut = 250;
 		
 		cap >> frame;
 		
@@ -124,8 +122,9 @@ int main()
 
 		morphologyEx(binaryImage, binaryImage, MORPH_OPEN, element);	// 开运算，先腐蚀，后膨胀。去掉小的白色轮廓
 
+#ifdef DEBUG
 		Mat binaryImage_ = binaryImage.clone();  // 二值图像备份，调试用
-
+#endif
 		vector<vector<Point> > contours;		// 所有轮廓，findContours函数的结果
 		findContours(binaryImage, contours, RETR_EXTERNAL, CHAIN_APPROX_NONE);	// 寻找轮廓
 
@@ -137,8 +136,11 @@ int main()
 		}
 
 		// 如果面积在指定范围内的轮廓数量小于2，则进入下一次循环
-		if (contoursInAreaRange.size() < 2)
+		if (contoursInAreaRange.size() < 2) {
+			yawOut = 250;
+			pitchOut = 250;
 			goto HERE;
+		}
 
 		// 对面积在指定范围内的轮廓拟合椭圆，得到相应的旋转矩形
 		rotatedRects.clear();
@@ -194,7 +196,10 @@ int main()
 			}
 		}
 
-		// 如果检测到灯条的数量小于0，则发送未检测到目标的信号，进入下次循环
+		/* 如果检测到灯条的数量等于0，则发送未检测到目标的信号，进入下一帧
+		 * 如果之前检测到了装甲（frameCount=0），而后又出现灯条数量为0的情况
+		 * 可能是对面步兵车被打败或撤退，则发送云台静止不动的信号，等待几秒再发送云台进入搜索模式的信号
+		 */
 		if (rotatedRectsOfLights.size() == 0) {
 			// 如果某一帧开始没有检测到装甲，frameCount自加一
             frameCount++;
@@ -203,9 +208,10 @@ int main()
                 frameCount--;
                 pitchOut = 250;
 				yawOut = 250;
-				if (fd >= 0)
-					sended = Serialport1.usart3_send(pitchOut, yawOut);
-            }
+            } else {
+				pitchOut = 100;
+				yawOut = 100;
+			}
 			goto HERE;
 		}
 
@@ -218,6 +224,7 @@ int main()
         tmpAngle0 = 10;
 		tmpAngle1 = 170;
 		findArmor = false;
+		// 寻找属于一个装甲的两个灯条，从而确定装甲的位置
 		for (int i = 0; i < rotatedRectsOfLights.size() - 1; i++) {
 			for (int j = i + 1; j < rotatedRectsOfLights.size(); j++) {
 				float angleDifference = abs(rotatedRectsOfLights[i].angle - rotatedRectsOfLights[j].angle);		// 灯带的角度差
@@ -242,16 +249,13 @@ int main()
 						tmpAngle0 = angleDifference;
 					else if (angleDifference > 170)
 						tmpAngle1 = angleDifference;
-					//cout << endl << i << ", " << j << endl;
 					findArmor = true;
 				}
 			}
 		}
-		//cout << endl << "---------------" << endl;
 
 		if (findArmor) {
-			// 如果检测到了装甲的位置，frameCount置零，并向串口发送装甲的位置信息
-			
+			// 如果检测到了装甲的位置，frameCount置零，并向串口发送装甲的位置信息			
             frameCount = 0;
 #ifdef DEBUG
 			circle(frame_, centerOfArmor, 10, Scalar(0, 0, 255), 2, LINE_AA);
@@ -277,29 +281,35 @@ int main()
 
  			if (fd >= 0)
 				sended = Serialport1.usart3_send(pitchOut, yawOut);	// 发送竖直方向和水平方向移动速度
-		} else if (rotatedRectsOfLights.size() >= 2) {
-			// 如果没有检测到装甲，且画面中灯条的数量大于2,则向窗口发送灯条的位置信息
-			int disX = centerOfArmor.x - rotatedRectsOfLights[0].center.x;
-			int disY = centerOfArmor.y - rotatedRectsOfLights[0].center.y;
+		} else {
+			frameCount++;
+			if (frameCount < 10) {
+				if (fd >= 0)
+					sended = Serialport1.usart3_send(pitchOut, yawOut);
+			} else if (rotatedRectsOfLights.size() >= 2) {
+				// 如果没有检测到装甲，且画面中灯条的数量大于2,则向窗口发送灯条的位置信息
+				int disX = centerOfArmor.x - rotatedRectsOfLights[0].center.x;
+				int disY = centerOfArmor.y - rotatedRectsOfLights[0].center.y;
 
-			disX = -disX;
-			disX += 100;
-			if (disX > 200)
-				disX = 200;
-			else if (disX < 0)
-				disX = 0;
+				disX = -disX;
+				disX += 100;
+				if (disX > 200)
+					disX = 200;
+				else if (disX < 0)
+					disX = 0;
 
-			disY += 100;
-			if (disY > 200)
-				disY = 200;
-			else if (disY < 0)
-				disY = 0;
+				disY += 100;
+				if (disY > 200)
+					disY = 200;
+				else if (disY < 0)
+					disY = 0;
 
-			yawOut = static_cast<uint8_t>(disX);
-			pitchOut = static_cast<uint8_t>(disY);
+				yawOut = static_cast<uint8_t>(disX);
+				pitchOut = static_cast<uint8_t>(disY);
 
-			if (fd >= 0)
-				sended = Serialport1.usart3_send(pitchOut, yawOut);	// 发送竖直方向和水平方向移动速度
+				if (fd >= 0)
+					sended = Serialport1.usart3_send(pitchOut, yawOut);	// 发送竖直方向和水平方向移动速度
+			}
 		}
 
 HERE:
