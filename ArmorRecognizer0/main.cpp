@@ -1,5 +1,6 @@
-/* version 1.1
+/* version 1.2
  * 修复BUG：没有检测到装甲，云台就会立刻归位的BUG
+ * 添加预测
  */
 
 #include <stdio.h>
@@ -38,12 +39,18 @@ bool findArmor;
 bool sended;					// 串口信息是否已经发送
 Point targetPoint(338, 248);
 Point centerOfArmor;
+Point predictPoint;				// 预测装甲板的位置
 
 // 计算直方图需要的参数
 Mat hMat, sMat, vMat;			// HSV单通道图
 int channels = 0;				// 计算第0个通道的直方图，calcHist参数
 int sizeHist = 180;				// 180个色度，calcHist参数
 MatND dstHist;					// calcHist结果
+
+// 卡尔曼滤波器参数
+const int stateNum = 4;			// 状态值4×1向量(x,y,△x,△y)
+const int measureNum = 2;		// 测量值2×1向量(x,y)
+Mat measurement = Mat::zeros(measureNum, 1, CV_32F); // 初始测量值x'(0)，因为后面要更新这个值，所以必须先定义
 
 int main()
 {
@@ -85,9 +92,24 @@ int main()
 	vector<RotatedRect> rotatedRects;			// 对面积在指定范围内的轮廓拟合椭圆，得到相应的旋转矩形
 	vector<RotatedRect> rotatedRectsOfLights;	// 蓝色/红色灯条的RotatedRect
 
+	// KalmanFilter初始化
+	KalmanFilter kf(stateNum, measureNum, 0);
+	int t = 20;
+	int t1 = 100;
+	kf.transitionMatrix = (Mat_<float>(4, 4) <<
+		1, 0, t, 0,
+		0, 1, 0, t,
+		0, 0, 1, 0,
+		0, 0, 0, 1);
+	setIdentity(kf.measurementMatrix);						// 测量矩阵H，setIdentity函数是初始化主对角线的值
+	setIdentity(kf.processNoiseCov, Scalar::all(1e-5));		// 系统噪声方差矩阵Q
+	setIdentity(kf.measurementNoiseCov, Scalar::all(1e-1));	// 测量噪声方差矩阵R
+	setIdentity(kf.errorCovPost, Scalar::all(1));			// 后验错误估计协方差矩阵P
+	
 #ifdef DEBUG
 	namedWindow(WINNAME, WINDOW_AUTOSIZE);
 	createTrackbar("Threshold", WINNAME, &m_threshold, 255, 0);
+	createTrackbar("t1", WINNAME, &t1, 200);
 #endif
 
 	//VideoCapture cap(fileName);
@@ -255,13 +277,34 @@ int main()
 		}
 
 		if (findArmor) {
+			if (frameCount > 5) {
+				kf.statePost.at<float>(0) = centerOfArmor.x;
+				kf.statePost.at<float>(1) = centerOfArmor.y;
+				kf.statePost.at<float>(2) = 0;
+				kf.statePost.at<float>(3) = 0;
+			}
+
+			kf.predict();
+			
 			// 如果检测到了装甲的位置，frameCount置零，并向串口发送装甲的位置信息			
             frameCount = 0;
 #ifdef DEBUG
 			circle(frame_, centerOfArmor, 10, Scalar(0, 0, 255), 2, LINE_AA);
 #endif
-			int disX = centerOfArmor.x - targetPoint.x;
-			int disY = centerOfArmor.y - targetPoint.y;
+
+			measurement.at<float>(0) = (float)centerOfArmor.x;
+			measurement.at<float>(1) = (float)centerOfArmor.y;
+
+			kf.correct(measurement);
+
+			predictPoint.x = (int)(t1 * kf.statePost.at<float>(2) + kf.statePost.at<float>(0));
+			predictPoint.y = (int)(t1 * kf.statePost.at<float>(3) + kf.statePost.at<float>(1));
+			
+#ifdef DEBUG
+			circle(frame_, predictPoint, 10, Scalar(0, 255, 255), 2, LINE_AA);
+#endif
+			int disX = predictPoint.x - targetPoint.x;
+			int disY = predictPoint.y - targetPoint.y;
 
 			disX = -disX;
 			disX += 100;
