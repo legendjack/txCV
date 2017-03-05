@@ -1,4 +1,11 @@
-/* version 1.2
+/* version 1.3
+ * 提高分辨率：800*600
+ * 提高帧率：cap.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));
+ *			 cap.set(CAP_PROP_FPS, 60);
+ * 提高饱和度：cap.set(CV_CAP_PROP_SATURATION, 80);
+ * 提高饱和度和分辨率可以提高检测装甲的距离
+ *
+ * version 1.2
  * 修复BUG：没有检测到装甲，云台就会立刻归位的BUG
  * 添加预测
  */
@@ -15,8 +22,8 @@
 #define WINNAME1 "Binary Image"
 #define MaxContourArea 450		// 面积大于该值的轮廓不是装甲的灯条
 #define MinContourArea 15		// 面积小于该值的轮廓不是装甲的灯条
-#define Width	640				// 视频宽
-#define Height	480				// 视频高
+#define Width	800				// 视频宽
+#define Height	600				// 视频高
 #define DEBUG
 
 // 全局变量
@@ -114,6 +121,12 @@ int main()
 
 	//VideoCapture cap(fileName);
 	VideoCapture cap(1);
+	
+	cap.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));
+	cap.set(CAP_PROP_FPS, 60);
+	cap.set(CV_CAP_PROP_SATURATION, 80);
+	cap.set(CAP_PROP_FRAME_WIDTH, Width);
+	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
 
 	if (!cap.isOpened()) {
 		cout << "VideoCapture initialize : failed" << endl;
@@ -210,10 +223,10 @@ int main()
 			bool b1 = false, b2 = false;
 			if (!(tmpA > 25 && tmpA < 155))
 				b1 = true;
-			if (HdivideW > 3.2 && HdivideW < 8.0)
+			if (HdivideW > 2.5 && HdivideW < 8.0)
 				b2 = true;
 
-			if (JudgeColor(dstHist) == detectColor && b1 && b2) {
+			if ((JudgeColor(dstHist) == detectColor) && b1) {
 				rotatedRectsOfLights.push_back(rotatedRects[i]);
 			}
 		}

@@ -64,7 +64,7 @@ int JudgeColor(MatND hist)
 	int blue = 0;
 	int otherColor = 0;
 
-	for (int i = 0; i < 15; i++)
+	for (int i = 0; i < 10; i++)
 	{
 		int binValue = color[i];
 		if (binValue > 99 && binValue < 125)
@@ -79,11 +79,11 @@ int JudgeColor(MatND hist)
 			otherColor++;
 	}
 
-	if ((red > blue && red > otherColor) || (maxValue > 155 && maxValue < 181))
+	if (red > blue && red > otherColor)
 	{
 		return RED;
 	}
-	else if ((red < blue && blue > otherColor) || (maxValue > 99 && maxValue < 125))
+	else if (red < blue && blue > otherColor)
 	{
 		return BLUE;
 	}
