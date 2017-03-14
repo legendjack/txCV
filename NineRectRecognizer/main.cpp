@@ -421,9 +421,9 @@ int main()
 
 				if (targetNum[0] == targetNum[1] && targetNum[1] == targetNum[2]) {
 					cout << "\ntargetNum : " << i + 1;
+					Serialport1.usart3_send(static_cast<uint8_t>(i + 1));
 					rectangle(frame, nineRect[i], Scalar(0, 0, 255), 3, LINE_AA);
 				}
-
 				cout << "\n---------" << endl;
 				break;
 			}
