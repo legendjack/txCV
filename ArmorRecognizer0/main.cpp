@@ -122,7 +122,7 @@ int main()
 	//VideoCapture cap(fileName);
 	VideoCapture cap(1);
 	
-	cap.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));
+	cap.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));	// 需要在设置宽高之前设置，否则无效
 	cap.set(CAP_PROP_FPS, 60);
 	cap.set(CV_CAP_PROP_SATURATION, 80);
 	cap.set(CAP_PROP_FRAME_WIDTH, Width);
@@ -200,20 +200,6 @@ int main()
 			drawContours(mask, corners_, -1, Scalar(255), -1, LINE_AA);	// 绘制掩模
 			dilate(mask, mask, element1);								// 膨胀处理
 			calcHist(&hMat, 1, &channels, mask, dstHist, 1, &sizeHist, ranges);	// 计算掩模的直方图
-
-			/* 绘制直方图 */
-// 			Mat dstImage(180, 180, CV_8U, Scalar(0));
-// 			double maxValue = 0;
-// 			minMaxLoc(dstHist, 0, &maxValue, 0, 0); // 求得最大值，用于归一化处理
-
-// 			for (int j = 0; j < 180; j++)
-// 			{
-// 				// 注意hist中是float类型
-// 				float binValue = dstHist.at<float>(j);
-// 				int realValue = cvRound(binValue / maxValue * 256); // 如果图片尺寸过大，可能出现某一灰度的像素太多，binValue值特别大的情况；这里归一化到0~255
-// 				rectangle(dstImage, Point(j, 256 - realValue), Point(j + 1, 256), Scalar(255), -1);
-// 			}
-// 			imshow("一维直方图", dstImage);
 			
 			float tmpA = rotatedRects[i].angle;
 			float HdivideW = rotatedRects[i].size.height / rotatedRects[i].size.width;
