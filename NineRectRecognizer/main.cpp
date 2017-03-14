@@ -12,16 +12,17 @@
 bool first = true;
 Mat frame, gray_img, canny_img;
 Mat element0;
-int t1 = 200, t2 = 250;	// canny阈值
-int key;
-int password[5];		// 密码区的5个数
-int password_int = 0;	// 
-bool password_changed = true;
-bool nineNumber_changed = true;
-int nineNumber[9];		// 九宫格区的9个数
-int nineNumber_int = 0;
-int count_ = 0;
-int targetRectNum = 0;
+int t1 = 200, t2 = 250;			// canny阈值
+int key;						// waitKey()返回值
+int password[5];				// 密码区的5个数
+int password_int = 0;			// 密码区前两个数组成的两位数，如果改变则认为密码变化
+bool password_changed = true;	// 密码区是否改变	
+bool nineNumber_changed = true; // 九宫格区是否改变
+int nineNumber[9];				// 九宫格区的9个数
+int nineNumber_int = 0;			// 九宫格第一行的三个数组成的三位数，如果变化则认为九宫格区改变
+int count_ = 0;					// 计数用，当前目标是密码区第count_个数
+int targetNum[3] = { 0,0,1 };	// 缓存3帧的将要发送的数据，如果三个数相等，则发送，否则认为有一帧误检，不发送
+int nineNumber_int_3frame[3] = { 0,0,1 };  // 缓存3帧九宫格数字，如果后两个数相等，则认为九宫格改变
 Mat element1 = getStructuringElement(MORPH_ELLIPSE, Size(2, 2));
 
 void onChanged(int, void*);
@@ -45,7 +46,7 @@ int main()
 	}
 
  	cap.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));
- 	cap.set(CV_CAP_PROP_FPS, 120);
+ 	cap.set(CV_CAP_PROP_FPS, 60);
  	cap.set(CAP_PROP_FRAME_WIDTH, Width);
  	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
 	
@@ -397,7 +398,10 @@ int main()
 			password_changed = false;
 
 		// 判断九宫格区是否改变，如果前三个数改变则认为变了
-		if (nineNumber_int != (nineNumber[0] * 100 + nineNumber[1] * 10 + nineNumber[2]))
+		nineNumber_int_3frame[0] = nineNumber_int_3frame[1];
+		nineNumber_int_3frame[1] = nineNumber_int_3frame[2];
+		nineNumber_int_3frame[2] = nineNumber[0] * 100 + nineNumber[1] * 10 + nineNumber[2];
+		if (nineNumber_int_3frame[0] != nineNumber_int_3frame[1] && nineNumber_int_3frame[2] == nineNumber_int_3frame[1])
 			nineNumber_changed = true;
 		else
 			nineNumber_changed = false;
@@ -411,12 +415,21 @@ int main()
 		
 		for (int i = 0; i < 9; i++) {
 			if (password[count_] == nineNumber[i]) {
-				rectangle(frame, nineRect[i], Scalar(0, 0, 255), 3, LINE_AA);
-				cout << "send targetRectNum : " << i <<endl;
-				Serialport1.usart3_send(static_cast<uint8_t>(i));
-				//targetRectNum = i;
+				targetNum[0] = targetNum[1];
+				targetNum[1] = targetNum[2];
+				targetNum[2] = i;
+
+				if (targetNum[0] == targetNum[1] && targetNum[1] == targetNum[2]) {
+					cout << "\ntargetNum : " << i + 1;
+					rectangle(frame, nineRect[i], Scalar(0, 0, 255), 3, LINE_AA);
+				}
+
+				cout << "\n---------" << endl;
+				break;
 			}
 		}
+		if (password_changed)
+			count_ = -1;
 
 		password_int = password[0] * 10 + password[1];
 		nineNumber_int = nineNumber[0] * 100 + nineNumber[1] * 10 + nineNumber[2];
