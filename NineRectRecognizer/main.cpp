@@ -9,6 +9,7 @@
 #define DEBUG
 
 map<string, string> config;
+int thresh = 100;
 bool first = true;
 Mat frame, gray_img, canny_img;
 Mat element0;

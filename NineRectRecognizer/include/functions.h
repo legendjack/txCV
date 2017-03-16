@@ -2,7 +2,7 @@
 #ifndef _FUNCTIONS_H_
 #define _FUNCTIONS_H_
 
-#include <opencv2\opencv.hpp>
+#include <opencv2/opencv.hpp>
 #include <iostream>
 
 using namespace std;
