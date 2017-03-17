@@ -55,10 +55,10 @@ int main()
 		return -1;
 	}
 
-// 	cap.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));
-// 	cap.set(CV_CAP_PROP_FPS, 30);
-// 	cap.set(CAP_PROP_FRAME_WIDTH, Width);
-// 	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
+ 	cap.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));
+ 	cap.set(CV_CAP_PROP_FPS, 30);
+ 	cap.set(CAP_PROP_FRAME_WIDTH, Width);
+ 	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
 	
 	element0 = getStructuringElement(MORPH_ELLIPSE, Size(2, 2));
 
@@ -87,7 +87,6 @@ int main()
 
 	if (!fsTrainingImages.isOpened()) {
 		cout << "ERROR, Cannot open file : images.xml\n\n";
-		//system("pause");
 		return 0;
 	}
 
@@ -151,14 +150,12 @@ int main()
 		 */
 		Mat contours_Mat(Height, Width, CV_8UC1, Scalar(0));
 		drawContours(contours_Mat, contours1, -1, Scalar(255), -1, LINE_AA);
-		erode(contours_Mat, contours_Mat, element0);
-		//imshow("contours_Mat", contours_Mat);
+		erode(contours_Mat, contours_Mat, element0);	// 腐蚀
 		vector<vector<Point> > contours2; // 面积在指定范围内的轮廓（九宫格区_）
 		findContours(contours_Mat, contours2, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
 
 		Mat contours_Mat1(Height, Width, CV_8UC1, Scalar(0));
 		drawContours(contours_Mat1, contours3, -1, Scalar(255), -1, LINE_AA);
-		//imshow("contours_Mat1", contours_Mat1);
 		vector<vector<Point> > contours4; // 面积在指定范围内的轮廓（密码区_）
 		findContours(contours_Mat1, contours4, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
 
@@ -187,7 +184,6 @@ int main()
 
 		// 如果多于9个轮廓，需要使用其他约束排除
 		if (contours2.size() > 9) {
-			//cout << "more than 9" << endl;
 			vector<RotatedRect> contours_rotatedRect_tmp;
 			for (int i = 0; i < contours_rotatedRect.size(); i++) {
 				bool b1 = false, b2 = false, b3 = false;
@@ -231,6 +227,7 @@ int main()
 				//修正，objectBoundary向右下角移动（向右17，向下10），再缩小（右侧38，下侧19）
 				objectBoundary += Point(12, 5);
 				objectBoundary -= Size(24, 10);
+				objectBoundary = objectBoundary & Rect(0, 0, Width, Height);
 				nineRect[i] = objectBoundary;
 			}
 
@@ -279,25 +276,17 @@ int main()
 			}
 		}
 
-// 		if (first && key == int('0')) {
-// 			for (int i = 0; i < 9; i++) {
-// 				imwrite(to_string(i) + ".png", nineRect_mat[i]);
-// 			}
-// 			first = false;
-// 		}
-		//cout << endl;
-
 		/************************************************************************/
 		/*                            检测密码区                                 */
 		/************************************************************************/
 		
 		// 密码区的旋转矩形
 		vector<RotatedRect> contours_rotatedRect1;
-		for (int i = 0; i < contours3.size(); i++) {
-			contours_rotatedRect1.push_back(minAreaRect(contours3[i]));
+		for (int i = 0; i < contours4.size(); i++) {
+			contours_rotatedRect1.push_back(minAreaRect(contours4[i]));
 		}
 
-		if (contours3.size() > 1) {
+		if (contours4.size() > 1) {
 			vector<RotatedRect> contours_rotatedRect1_tmp;
 			for (int i = 0; i < contours_rotatedRect1.size(); i++) {
 				bool b1 = false, b2 = false;
@@ -324,8 +313,7 @@ int main()
 			contours_rotatedRect1.clear();
 			contours_rotatedRect1 = contours_rotatedRect1_tmp;
 		}
-		else if (contours2.size() < 1) {
-			//cout << "less than 1" << endl;
+		else if (contours4.size() < 1) {
 			imshow("bgr", frame);
 			key = waitKey(1);
 			if (key == 27)
@@ -436,7 +424,7 @@ int main()
 				targetNum[2] = i;
 
 				if (targetNum[0] == targetNum[1] && targetNum[1] == targetNum[2]) {
-					cout << "targetNum : " << i + 1;
+					cout << "targetNum : " << i + 1 << endl;
 					Serialport1.usart3_send(static_cast<uint8_t>(i + 1));
 					rectangle(frame, nineRect[i], Scalar(0, 0, 255), 3, LINE_AA);
 				}
