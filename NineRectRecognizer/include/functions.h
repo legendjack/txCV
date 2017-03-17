@@ -43,4 +43,34 @@ void sortContours(vector<vector<Point> >& number_contours)
 				swap(number_contours[i], number_contours[j]);
 }
 
+void sortRotatedRect(vector<RotatedRect>& contours_rotatedRect_)
+{
+	for (int i = 0; i < 9; ++i)//对y进行冒泡排序
+		for (int j = 0; j < 8 - i; ++j)
+			if (contours_rotatedRect_[j].center.y > contours_rotatedRect_[j + 1].center.y)
+				swap(contours_rotatedRect_[j], contours_rotatedRect_[j + 1]);
+
+	for (int k = 0; k < 3; ++k)//每3个一组，对x进行排序
+		for (int i = 0; i < 3; ++i)
+			for (int j = 0; j < 2 - i; ++j)
+				if (contours_rotatedRect_[3 * k + j].center.x > contours_rotatedRect_[3 * k + j + 1].center.x)
+					swap(contours_rotatedRect_[3 * k + j], contours_rotatedRect_[3 * k + j + 1]);
+}
+
+int sum_mat(Mat m_) {
+	int sum_value = 0;
+	int sum_max = 0;
+	for (int i = 0; i < 160; i++) {
+		if (m_.data[i] > 0) {
+			sum_value++;
+			if (sum_value > sum_max)
+				sum_max = sum_value;
+		}
+		else
+			sum_value = 0;
+	}
+
+	return sum_max;
+}
+
 #endif

@@ -5,7 +5,7 @@
 #define Width 640
 #define Height 480
 #define MinArea 1400
-#define MaxArea 2000
+#define MaxArea 2400
 #define DEBUG
 
 map<string, string> config;
@@ -128,10 +128,16 @@ int main()
 		for (int i = 0; i < contours0.size(); i++) {
 			double area = contourArea(contours0[i]);
 			if (area > MinArea && area < MaxArea) {		//2000~4500
-				contours1.push_back(contours0[i]);
+				vector<Point> contours_poly;
+				approxPolyDP(contours0[i], contours_poly, 5, false);
+				if (contours_poly.size() <= 6)
+					contours1.push_back(contours0[i]);
 			}
-			else if (area > 3000 && area < 3500) {	//5000~7500
-				contours3.push_back(contours0[i]);
+			else if (area >(MinArea * 9 / 5) && area < (MaxArea * 9 / 5)) {	//5000~7500, 3000~3500
+				vector<Point> contours_poly;
+				approxPolyDP(contours0[i], contours_poly, 5, false);
+				if (contours_poly.size() <= 6)
+					contours3.push_back(contours0[i]);
 			}
 		}
 
@@ -183,7 +189,7 @@ int main()
 		}
 
 		// 如果多于9个轮廓，需要使用其他约束排除
-		if (contours2.size() > 9) {
+		if (contours2.size() >= 9) {
 			vector<RotatedRect> contours_rotatedRect_tmp;
 			for (int i = 0; i < contours_rotatedRect.size(); i++) {
 				bool b1 = false, b2 = false, b3 = false;
@@ -286,7 +292,7 @@ int main()
 			contours_rotatedRect1.push_back(minAreaRect(contours4[i]));
 		}
 
-		if (contours4.size() > 1) {
+		if (contours4.size() >= 1) {
 			vector<RotatedRect> contours_rotatedRect1_tmp;
 			for (int i = 0; i < contours_rotatedRect1.size(); i++) {
 				bool b1 = false, b2 = false;
@@ -350,9 +356,22 @@ int main()
 			Mat dstImage(40, 160, CV_8UC1, Scalar(0));
 			warpPerspective(gray_img, dstImage, warpMat, dstImage.size());
 
-			Mat dstImage_bin;
+			Mat dstImage_bin;	// 密码区的二值图
 			threshold(dstImage, dstImage_bin, thresh, 255, THRESH_BINARY_INV);
 			dilate(dstImage_bin, dstImage_bin, element0);
+			
+			Mat mat_zero(1, 160, CV_8UC1, Scalar(0));
+			int int_tmp = sum_mat(dstImage_bin.row(0));
+			if (int_tmp > 20) 
+				mat_zero.copyTo(dstImage_bin(Rect(0, 0, 160, 1)));
+
+			int_tmp = sum_mat(dstImage_bin.row(39));
+			if (int_tmp > 25) {
+				mat_zero.copyTo(dstImage_bin(Rect(0, 39, 160, 1)));
+				int_tmp = sum_mat(dstImage_bin.row(38));
+				if (int_tmp > 25)
+					mat_zero.copyTo(dstImage_bin(Rect(0, 38, 160, 1)));
+			}
 
 #ifdef DEBUG
 			Mat dst_img(Height, Width, CV_8UC1, Scalar(0));
