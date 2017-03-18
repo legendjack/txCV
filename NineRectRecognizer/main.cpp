@@ -12,7 +12,7 @@ map<string, string> config;
 int thresh = 100;
 bool first = true;
 Mat frame, gray_img, canny_img;
-Mat element0;
+Mat element0, element1;
 int t1 = 200, t2 = 250;			// cannyãÐÖµ
 int key;						// waitKey()·µ»ØÖµ
 int password[5];				// ÃÜÂëÇøµÄ5¸öÊý
@@ -24,7 +24,6 @@ int nineNumber_int = 0;			// ¾Å¹¬¸ñµÚÒ»ÐÐµÄÈý¸öÊý×é³ÉµÄÈýÎ»Êý£¬Èç¹û±ä»¯ÔòÈÏÎª¾Å¹
 int count_ = 0;					// ¼ÆÊýÓÃ£¬µ±Ç°Ä¿±êÊÇÃÜÂëÇøµÚcount_¸öÊý
 int targetNum[3] = { 0,0,1 };	// »º´æ3Ö¡µÄ½«Òª·¢ËÍµÄÊý¾Ý£¬Èç¹ûÈý¸öÊýÏàµÈ£¬Ôò·¢ËÍ£¬·ñÔòÈÏÎªÓÐÒ»Ö¡Îó¼ì£¬²»·¢ËÍ
 int nineNumber_int_3frame[3] = { 0,0,1 };  // »º´æ3Ö¡¾Å¹¬¸ñÊý×Ö£¬Èç¹ûºóÁ½¸öÊýÏàµÈ£¬ÔòÈÏÎª¾Å¹¬¸ñ¸Ä±ä
-Mat element1 = getStructuringElement(MORPH_ELLIPSE, Size(2, 2));
 
 void onChanged(int, void*);
 
@@ -61,6 +60,7 @@ int main()
  	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
 	
 	element0 = getStructuringElement(MORPH_ELLIPSE, Size(2, 2));
+	element1 = getStructuringElement(MORPH_ELLIPSE, Size(3, 3));
 
 #ifdef DEBUG
 	namedWindow("canny");
@@ -310,7 +310,7 @@ int main()
 					b1 = true;
 				}
 
-				if (tmp_float > 4.0 && tmp_float < 4.5) {
+				if (tmp_float > 3.5 && tmp_float < 4.5) {
 					b2 = true;
 				}
 				if (b1 && b2)
@@ -373,6 +373,8 @@ int main()
 					mat_zero.copyTo(dstImage_bin(Rect(0, 38, 160, 1)));
 			}
 
+			morphologyEx(dstImage_bin, dstImage_bin, MORPH_OPEN, element0);	// ¿ªÔËËã£¬ÏÈ¸¯Ê´ÔÙÅòÕÍ
+			
 #ifdef DEBUG
 			Mat dst_img(Height, Width, CV_8UC1, Scalar(0));
 			for (int i = 0; i < 9; i++) {
