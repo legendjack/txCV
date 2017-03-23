@@ -9,7 +9,6 @@
 #define DEBUG
 
 map<string, string> config;
-int thresh = 100;
 bool first = true;
 Mat frame, gray_img, canny_img;
 Mat element0, element1;
@@ -35,8 +34,6 @@ int main()
 		cout << "无法读取 video.cfg" << endl;
 		return -1;
 	}
-
-	thresh = atoi(config["THRESHOLD"].c_str());
 	
 	// 初始化串口类
 	Serialport Serialport1("/dev/ttyTHS0");
@@ -240,7 +237,8 @@ int main()
 			RectSort(nineRect);		// 对九个Rect进行排序
 
 			for (int i = 0; i < 9; i++) {
-				threshold(gray_img(nineRect[i]), nineRect_mat[i], thresh, 255, THRESH_BINARY_INV);
+				threshold(gray_img(nineRect[i]), nineRect_mat[i], 0, 255, THRESH_OTSU);
+				threshold(nineRect_mat[i], nineRect_mat[i], 100, 255, THRESH_BINARY_INV);
 				dilate(nineRect_mat[i], nineRect_mat[i], element1);		// 膨胀
 				rectangle(frame, nineRect[i], Scalar(204, 122, 0), 2, LINE_AA);
 				char distance[10];
@@ -357,7 +355,8 @@ int main()
 			warpPerspective(gray_img, dstImage, warpMat, dstImage.size());
 
 			Mat dstImage_bin;	// 密码区的二值图
-			threshold(dstImage, dstImage_bin, thresh, 255, THRESH_BINARY_INV);
+			threshold(dstImage, dstImage_bin, 0, 255, THRESH_OTSU);
+			threshold(dstImage_bin, dstImage_bin, 100, 255, THRESH_BINARY_INV);
 			dilate(dstImage_bin, dstImage_bin, element0);
 			
 			Mat mat_zero(1, 160, CV_8UC1, Scalar(0));
@@ -461,7 +460,7 @@ int main()
 		cout << "\n---------" << endl;
 		imshow("bgr", frame);
 
-		key = waitKey(20);
+		key = waitKey(5);
 		if (key == 27)
 			break;
 		else if (key == int('0'))
