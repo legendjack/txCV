@@ -8,8 +8,12 @@
  * version 1.2
  * 修复BUG：没有检测到装甲，云台就会立刻归位的BUG
  * 添加预测
+ * 
+ * version 1.3
+ * 多线程，一个线程专门读取视频帧，另一个线程处理视频帧
  */
 
+#include <pthread.h>
 #include <stdio.h>
 #include <iostream>
 #include <opencv2/opencv.hpp>
@@ -27,6 +31,7 @@
 #define DEBUG
 
 // 全局变量
+VideoCapture cap;
 map<string, string> config;
 Mat frame, gray;				// 视频帧及其灰度图
 Mat binaryImage, hsvImage;		// 二值图及HSV图，使用cvtColor得到
@@ -58,6 +63,8 @@ MatND dstHist;					// calcHist结果
 const int stateNum = 4;			// 状态值4×1向量(x,y,△x,△y)
 const int measureNum = 2;		// 测量值2×1向量(x,y)
 Mat measurement = Mat::zeros(measureNum, 1, CV_32F); // 初始测量值x'(0)，因为后面要更新这个值，所以必须先定义
+
+void* capFrameThread(void *arg);
 
 int main()
 {
@@ -120,10 +127,8 @@ int main()
 #endif
 
 	//VideoCapture cap(fileName);
-	VideoCapture cap(1);
-	
+	cap.open(1);
 	cap.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));	// 需要在设置宽高之前设置，否则无效
-	cap.set(CAP_PROP_FPS, 60);
 	cap.set(CV_CAP_PROP_SATURATION, 80);
 	cap.set(CAP_PROP_FRAME_WIDTH, Width);
 	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
@@ -133,14 +138,16 @@ int main()
 		return -1;
 	}
 
+	// 开启读取视频帧的线程
+	pthread_t id;
+	int ret = pthread_create(&id, NULL, capFrameThread, NULL);
+	
 	/***************************************
 				开始处理每一帧
 	****************************************/
 	while (true)
 	{
 		sended = false;
-		
-		cap >> frame;
 		
 		if (frame.empty())
 			break;
@@ -377,4 +384,13 @@ HERE:
 #endif
 	}
 	return 0;
+}
+
+void* capFrameThread(void *arg)
+{
+	while(true) {
+		if (cap.isOpened())
+			cap >> frame;
+	}
+    return NULL;
 }
