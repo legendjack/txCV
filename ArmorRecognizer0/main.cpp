@@ -141,6 +141,11 @@ int main()
 	// 开启读取视频帧的线程
 	pthread_t id;
 	int ret = pthread_create(&id, NULL, capFrameThread, NULL);
+	if (!ret) {
+		cout << "open thread to capture frame: success" << endl;
+	} else {
+		cout << "open thread to capture frame: failed" << endl;
+	}
 	
 	/***************************************
 				开始处理每一帧
@@ -150,7 +155,7 @@ int main()
 		sended = false;
 		
 		if (frame.empty())
-			break;
+			continue;
 
 #ifdef DEBUG
 		Mat frame_ = frame.clone();		// 帧图像备份，调试用
@@ -262,7 +267,7 @@ int main()
 				float rotatedRectWidth = rotatedRectsOfLights[i].size.width;
 				if (rotatedRectHeight < rotatedRectWidth)
 					exchange(rotatedRectHeight, rotatedRectWidth);
-				if (xDifference < rotatedRectHeight)
+				if (xDifference < rotatedRectHeight*2/3)
 					continue;
 				if ((angleDifference < 10 || angleDifference > 170) &&
 					(angleDifference < tmpAngle0 || angleDifference > tmpAngle1) &&
@@ -331,14 +336,15 @@ int main()
  			if (fd >= 0)
 				sended = Serialport1.usart3_send(pitchOut, yawOut);	// 发送竖直方向和水平方向移动速度
 		} else {
+			// 检测到灯条但是没有匹配到装甲
 			frameCount++;
 			if (frameCount < 10) {
 				if (fd >= 0)
 					sended = Serialport1.usart3_send(pitchOut, yawOut);
-			} else if (rotatedRectsOfLights.size() >= 2) {
+			} else { // if (rotatedRectsOfLights.size() >= 2)
 				// 如果没有检测到装甲，且画面中灯条的数量大于2,则向窗口发送灯条的位置信息
-				int disX = centerOfArmor.x - rotatedRectsOfLights[0].center.x;
-				int disY = centerOfArmor.y - rotatedRectsOfLights[0].center.y;
+				int disX = rotatedRectsOfLights[0].center.x - targetPoint.x;
+				int disY = rotatedRectsOfLights[0].center.y - targetPoint.y;
 
 				disX = -disX;
 				disX += 100;
