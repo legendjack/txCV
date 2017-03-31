@@ -11,6 +11,11 @@
  * 
  * version 1.3
  * 多线程，一个线程专门读取视频帧，另一个线程处理视频帧
+ *
+ * version 1.4
+ * 去掉了KalmanFilter：KF利用目标在两帧间的位置得到速度，但是云台转速稳定后，目标
+ * 在画面中的位置相对固定（因为摄像头是固定在云台上的），计算出来的速度为0，所以KF失效
+ * 添加鼠标响应获取targetPoint
  */
 
 #include <pthread.h>
@@ -49,9 +54,9 @@ int frameCount = 150;
 int lightsCount = 0;			// 图像中装甲灯条的数量
 bool findArmor;
 bool sended;					// 串口信息是否已经发送
-Point targetPoint(338, 248);
+Point targetPoint(566, 315);
 Point centerOfArmor;
-Point predictPoint;				// 预测装甲板的位置
+//Point predictPoint;				// 预测装甲板的位置
 
 // 计算直方图需要的参数
 Mat hMat, sMat, vMat;			// HSV单通道图
@@ -106,6 +111,7 @@ int main()
 	vector<RotatedRect> rotatedRects;			// 对面积在指定范围内的轮廓拟合椭圆，得到相应的旋转矩形
 	vector<RotatedRect> rotatedRectsOfLights;	// 蓝色/红色灯条的RotatedRect
 
+/*
 	// KalmanFilter初始化
 	KalmanFilter kf(stateNum, measureNum, 0);
 	int t = 20;
@@ -119,11 +125,13 @@ int main()
 	setIdentity(kf.processNoiseCov, Scalar::all(1e-5));		// 系统噪声方差矩阵Q
 	setIdentity(kf.measurementNoiseCov, Scalar::all(1e-1));	// 测量噪声方差矩阵R
 	setIdentity(kf.errorCovPost, Scalar::all(1));			// 后验错误估计协方差矩阵P
-	
+*/
+
 #ifdef DEBUG
 	namedWindow(WINNAME, WINDOW_AUTOSIZE);
 	createTrackbar("Threshold", WINNAME, &m_threshold, 255, 0);
 	createTrackbar("t1", WINNAME, &t1, 200);
+	setMouseCallback(WINNAME, on_Mouse);					// 鼠标响应函数获取targetPoint
 #endif
 
 	//VideoCapture cap(fileName);
@@ -288,34 +296,16 @@ int main()
 		}
 
 		if (findArmor) {
-			if (frameCount > 5) {
-				kf.statePost.at<float>(0) = centerOfArmor.x;
-				kf.statePost.at<float>(1) = centerOfArmor.y;
-				kf.statePost.at<float>(2) = 0;
-				kf.statePost.at<float>(3) = 0;
-			}
-
-			kf.predict();
 			
-			// 如果检测到了装甲的位置，frameCount置零，并向串口发送装甲的位置信息			
-            frameCount = 0;
+			// 如果检测到了装甲的位置，frameCount置零，并向串口发送装甲的位置信息	
+			frameCount = 0;
+
 #ifdef DEBUG
 			circle(frame_, centerOfArmor, 10, Scalar(0, 0, 255), 2, LINE_AA);
 #endif
 
-			measurement.at<float>(0) = (float)centerOfArmor.x;
-			measurement.at<float>(1) = (float)centerOfArmor.y;
-
-			kf.correct(measurement);
-
-			predictPoint.x = (int)(t1 * kf.statePost.at<float>(2) + kf.statePost.at<float>(0));
-			predictPoint.y = (int)(t1 * kf.statePost.at<float>(3) + kf.statePost.at<float>(1));
-			
-#ifdef DEBUG
-			circle(frame_, predictPoint, 10, Scalar(0, 255, 255), 2, LINE_AA);
-#endif
-			int disX = predictPoint.x - targetPoint.x;
-			int disY = predictPoint.y - targetPoint.y;
+			int disX = centerOfArmor.x - targetPoint.x;
+			int disY = centerOfArmor.y - targetPoint.y;
 
 			disX = -disX;
 			disX += 100;
@@ -399,4 +389,11 @@ void* capFrameThread(void *arg)
 			cap >> frame;
 	}
     return NULL;
+}
+
+void on_Mouse(int event, int x, int y, int flags, void*) {
+	if (event == EVENT_LBUTTONDOWN) {
+		targetPoint.x = x;
+		targetPoint.y = y;
+	}
 }
