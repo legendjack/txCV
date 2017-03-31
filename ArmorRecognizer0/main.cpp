@@ -69,6 +69,7 @@ const int stateNum = 4;			// 状态值4×1向量(x,y,△x,△y)
 const int measureNum = 2;		// 测量值2×1向量(x,y)
 Mat measurement = Mat::zeros(measureNum, 1, CV_32F); // 初始测量值x'(0)，因为后面要更新这个值，所以必须先定义
 
+void on_Mouse(int event, int x, int y, int flags, void*);
 void* capFrameThread(void *arg);
 
 int main()
@@ -130,7 +131,7 @@ int main()
 #ifdef DEBUG
 	namedWindow(WINNAME, WINDOW_AUTOSIZE);
 	createTrackbar("Threshold", WINNAME, &m_threshold, 255, 0);
-	createTrackbar("t1", WINNAME, &t1, 200);
+	//createTrackbar("t1", WINNAME, &t1, 200);
 	setMouseCallback(WINNAME, on_Mouse);					// 鼠标响应函数获取targetPoint
 #endif
 
@@ -160,6 +161,8 @@ int main()
 	****************************************/
 	while (true)
 	{
+		// double time0 = static_cast<double>(getTickCount());
+		
 		sended = false;
 		
 		if (frame.empty())
@@ -360,6 +363,8 @@ int main()
 HERE:
 		if (!sended)
 			Serialport1.usart3_send(pitchOut, yawOut);
+		time0 = ((double)getTickCount() - time0) / getTickFrequency();
+		cout << "time : " << time0 * 1000 << "ms"  << endl;
 #ifdef DEBUG		
         cout << static_cast<int>(pitchOut) << ", " << static_cast<int>(yawOut) << endl;
 		imshow(WINNAME, frame_);

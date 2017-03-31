@@ -228,7 +228,7 @@ int Serialport::UART0_Recv(  char *rcv_buf,int data_len)
         return FALSE;
     }
 }
-int Serialport::UART0_Recv_Odm( int16_t *odm_buf)
+int Serialport::UART0_Recv_Odm(int16_t *odm_buf)
 {
     int len,fs_sel;
     bool a,b,c,d;
@@ -270,7 +270,6 @@ int Serialport::UART0_Recv_Odm( int16_t *odm_buf)
        }
     else return FALSE;
 }
-
 
 bool Serialport::usart3_send(uint8_t picth, uint8_t yaw)
 {
