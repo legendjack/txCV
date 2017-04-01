@@ -180,7 +180,7 @@ int Serialport::set_opt(int nSpeed , int nBits, char nEvent , int nStop )
 bool Serialport::UART0_Send(uint8_t *str)
 {
     buffer  = str;
-    if(write(fd, buffer ,9)<0)
+    if(write(fd, buffer, 6)<0)
     {
         perror("write error");
         return false;
@@ -271,17 +271,16 @@ int Serialport::UART0_Recv_Odm(int16_t *odm_buf)
     else return FALSE;
 }
 
-bool Serialport::usart3_send(uint8_t picth, uint8_t yaw)
+bool Serialport::usart3_send(uint8_t picth, uint8_t yaw, uint8_t k)
 {
   int a;
   uint8_t data_temp[7];
   data_temp[0] = 0xaa;
-  data_temp[1] = 0xab;
-  data_temp[2] = picth>>8;
-  data_temp[3] = picth&0xff;
-  data_temp[4] = yaw>>8;
-  data_temp[5] = yaw&0xff;
-  data_temp[6] = 0xac;
+  data_temp[1] = pitch;
+  data_temp[2] = 0xab;
+  data_temp[3] = yaw;
+  data_temp[4] = 0xac;
+  data_temp[5] = k;
 
   a = UART0_Send(data_temp);
   return a;
