@@ -25,7 +25,6 @@
 #include "functions.h"
 #include "getConfig.h"
 #include "serialsom.h"
-#include "MyQueue.h"
 
 // 宏定义
 #define WINNAME	"Armor Recognition"
@@ -57,7 +56,6 @@ bool findArmor;
 bool sended;					// 串口信息是否已经发送
 Point targetPoint(566, 315);
 Point centerOfArmor;
-MyQueue mq(20);
 //Point predictPoint;				// 预测装甲板的位置
 
 // 计算直方图需要的参数
@@ -325,37 +323,17 @@ int main()
 			else if (disY < 0)
 				disY = 0;
 
-			mq.push(disX);
-			
-			// 如果目标不在匀速运动的状态，则状态值设置10
-			int status = 10;
-			
-			/* 如果目标在匀速移动，且disX大于110，则发送状态值20，云台加速追赶
-			 * 如果目标在匀速移动，且disX小于110（已经追赶上），则发送状态值15，云台匀速移动
-			 */
-			if (mq.dataSize == 20 && mq.min > 145 && mq.max < 170 && disX >= 110)
-				status = 20;
-			else if (mq.dataSize == 20 && mq.min > 145 && mq.max < 170 && disX < 110)
-				status = 15;
-			
-			if (mq.dataSize == 20 && mq.min > 25 && mq.max < 65 && disX <= 90)
-				status = 0;
-			else if (mq.dataSize == 20 && mq.min > 25 && mq.max < 65 && disX > 90)
-				status = 5;
-			
 			yawOut = static_cast<uint8_t>(disX);
 			pitchOut = static_cast<uint8_t>(disY);
 
  			if (fd >= 0)
-				sended = Serialport1.usart3_send(pitchOut, yawOut, static_cast<uint8_t>(status));	// 发送竖直方向和水平方向移动速度
-			
+				sended = Serialport1.usart3_send(pitchOut, yawOut);	// 发送竖直方向和水平方向移动速度
 		} else {
 			// 检测到灯条但是没有匹配到装甲
 			frameCount++;
-			mq.clear();
 			if (frameCount < 10) {
 				if (fd >= 0)
-					sended = Serialport1.usart3_send(pitchOut, yawOut, static_cast<uint8_t>(10));
+					sended = Serialport1.usart3_send(pitchOut, yawOut);
 			} else { // if (rotatedRectsOfLights.size() >= 2)
 				// 如果没有检测到装甲，且画面中灯条的数量大于2,则向窗口发送灯条的位置信息
 				int disX = rotatedRectsOfLights[0].center.x - targetPoint.x;
@@ -378,13 +356,13 @@ int main()
 				pitchOut = static_cast<uint8_t>(disY);
 
 				if (fd >= 0)
-					sended = Serialport1.usart3_send(pitchOut, yawOut, static_cast<uint8_t>(10));	// 发送竖直方向和水平方向移动速度
+					sended = Serialport1.usart3_send(pitchOut, yawOut);	// 发送竖直方向和水平方向移动速度
 			}
 		}
 
 HERE:
 		if (!sended)
-			Serialport1.usart3_send(pitchOut, yawOut, static_cast<uint8_t>(10));
+			Serialport1.usart3_send(pitchOut, yawOut);
 		time0 = ((double)getTickCount() - time0) / getTickFrequency();
 		cout << "time : " << time0 * 1000 << "ms"  << endl;
 #ifdef DEBUG		
