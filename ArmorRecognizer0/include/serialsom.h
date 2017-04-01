@@ -32,7 +32,7 @@ public:
         int UART0_Recv(char *rcv_buf,int data_len);
         int UART0_Recv_Odm( int16_t *odm_buf);
         bool  UART0_INIT(void);
-        bool usart3_send(uint8_t picth, uint8_t yaw);
+        bool usart3_send(uint8_t pitch, uint8_t yaw, uint8_t k);
 private:
          int fd ;
 
@@ -271,10 +271,10 @@ int Serialport::UART0_Recv_Odm(int16_t *odm_buf)
     else return FALSE;
 }
 
-bool Serialport::usart3_send(uint8_t picth, uint8_t yaw, uint8_t k)
+bool Serialport::usart3_send(uint8_t pitch, uint8_t yaw, uint8_t k)
 {
   int a;
-  uint8_t data_temp[7];
+  uint8_t data_temp[6];
   data_temp[0] = 0xaa;
   data_temp[1] = pitch;
   data_temp[2] = 0xab;

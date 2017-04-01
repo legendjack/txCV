@@ -8,7 +8,7 @@
  * version 1.2
  * 修复BUG：没有检测到装甲，云台就会立刻归位的BUG
  * 添加预测
- * 
+ *
  * version 1.3
  * 多线程，一个线程专门读取视频帧，另一个线程处理视频帧
  *
@@ -61,6 +61,7 @@ bool sended;					// 串口信息是否已经发送
 Point targetPoint(566, 315);
 Point centerOfArmor;
 MyQueue mq(20);
+bool isUniformSpeed = false;
 //Point predictPoint;				// 预测装甲板的位置
 
 // 计算直方图需要的参数
@@ -160,16 +161,16 @@ int main()
 	} else {
 		cout << "open thread to capture frame: failed" << endl;
 	}
-	
+
 	/***************************************
 				开始处理每一帧
 	****************************************/
 	while (true)
 	{
 		// double time0 = static_cast<double>(getTickCount());
-		
+
 		sended = false;
-		
+
 		if (frame.empty())
 			continue;
 
@@ -228,7 +229,7 @@ int main()
 			drawContours(mask, corners_, -1, Scalar(255), -1, LINE_AA);	// 绘制掩模
 			dilate(mask, mask, element1);								// 膨胀处理
 			calcHist(&hMat, 1, &channels, mask, dstHist, 1, &sizeHist, ranges);	// 计算掩模的直方图
-			
+
 			float tmpA = rotatedRects[i].angle;
 			float HdivideW = rotatedRects[i].size.height / rotatedRects[i].size.width;
 			if (HdivideW < 1)
@@ -304,8 +305,8 @@ int main()
 		}
 
 		if (findArmor) {
-			
-			// 如果检测到了装甲的位置，frameCount置零，并向串口发送装甲的位置信息	
+
+			// 如果检测到了装甲的位置，frameCount置零，并向串口发送装甲的位置信息
 			frameCount = 0;
 
 #ifdef DEBUG
@@ -328,30 +329,50 @@ int main()
 			else if (disY < 0)
 				disY = 0;
 
-			mq.push(disX);
-			
+			if(!isUniformSpeed)
+				mq.push(disX);
+
 			// 如果目标不在匀速运动的状态，则状态值设置10
 			int status = 10;
-			
+
 			/* 如果目标在匀速移动，且disX大于110，则发送状态值20，云台加速追赶
 			 * 如果目标在匀速移动，且disX小于110（已经追赶上），则发送状态值15，云台匀速移动
 			 */
-			if (mq.dataSize == 20 && mq.min > 145 && mq.max < 170 && disX >= 110)
+			if (mq.dataSize == 20 && mq.min > 145 && mq.max < 170 && disX >= 110) {
 				status = 20;
-			else if (mq.dataSize == 20 && mq.min > 145 && mq.max < 170 && disX < 110)
+				isUniformSpeed = true;
+			}
+			else if (mq.dataSize == 20 && mq.min > 145 && mq.max < 170
+				&& disX < 110 && disX > 90 ) {
 				status = 15;
-			
-			if (mq.dataSize == 20 && mq.min > 25 && mq.max < 65 && disX <= 90)
+				isUniformSpeed = true;
+			}
+			else if (mq.dataSize == 20 && mq.min > 145 && mq.max < 170 && disX < 90 ) {
+				status = 10;
+				isUniformSpeed = false;
+			}
+
+			if (mq.dataSize == 20 && mq.min > 25 && mq.max < 65 && disX <= 90) {
 				status = 0;
-			else if (mq.dataSize == 20 && mq.min > 25 && mq.max < 65 && disX > 90)
+				isUniformSpeed = true;
+			}
+			else if (mq.dataSize == 20 && mq.min > 25 && mq.max < 65
+				&& disX > 90 && disX < 110) {
 				status = 5;
-			
+				isUniformSpeed = true;
+			}
+			else if (mq.dataSize == 20 && mq.min > 25 && mq.max < 65 && disX > 110) {
+				status = 10;
+				isUniformSpeed = false;
+			}
+
+
 			yawOut = static_cast<uint8_t>(disX);
 			pitchOut = static_cast<uint8_t>(disY);
 
  			if (fd >= 0)
 				sended = Serialport1.usart3_send(pitchOut, yawOut, static_cast<uint8_t>(status));	// 发送竖直方向和水平方向移动速度
-			
+
 		} else {
 			// 检测到灯条但是没有匹配到装甲
 			frameCount++;
@@ -388,9 +409,9 @@ int main()
 HERE:
 		if (!sended)
 			Serialport1.usart3_send(pitchOut, yawOut, static_cast<uint8_t>(10));
-		time0 = ((double)getTickCount() - time0) / getTickFrequency();
-		cout << "time : " << time0 * 1000 << "ms"  << endl;
-#ifdef DEBUG		
+		//time0 = ((double)getTickCount() - time0) / getTickFrequency();
+		//cout << "time : " << time0 * 1000 << "ms"  << endl;
+#ifdef DEBUG
         cout << static_cast<int>(pitchOut) << ", " << static_cast<int>(yawOut) << endl;
 		imshow(WINNAME, frame_);
 
