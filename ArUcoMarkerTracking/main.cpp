@@ -43,15 +43,15 @@ void on_Mouse(int event, int x, int y, int flags, void*) {
 
 int main()
 {
-	cap.open(0);
+	cap.open(1);
 	cap.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));
 	cap.set(CAP_PROP_FRAME_WIDTH, 800);
 	cap.set(CAP_PROP_FRAME_HEIGHT, 600);
 
-    pthread_t id;
+    //pthread_t id;
 
-	int ret = pthread_create(&id,NULL, thread,NULL);
-	
+	//int ret = pthread_create(&id,NULL, thread,NULL);
+
 	Serialport Serialport1("/dev/ttyUSB0");
 	int fd = Serialport1.open_port("/dev/ttyUSB0");
 	if (fd >= 0)
@@ -61,10 +61,13 @@ int main()
 
 	ArUcoMarker marker;
 
+    namedWindow("frame");
 	setMouseCallback("frame", on_Mouse);
-	
+
 	while(true) {
 		double time0 = static_cast<double>(getTickCount());
+
+		cap >>frame;
 		if(!frame.empty()) {
 
 			marker.detect(frame);
@@ -74,9 +77,9 @@ int main()
 				marker.getMarkersCorners(corners);
 				centerOfArmor.x = corners[0][0].x;
 				centerOfArmor.y = corners[0][0].y;
-				
+
 				circle(frame, centerOfArmor, 10, Scalar(0, 0, 255), 2, LINE_AA);
-				
+
 				int disX = centerOfArmor.x - targetPoint.x;
 				int disY = centerOfArmor.y - targetPoint.y;
 
@@ -135,6 +138,9 @@ int main()
 
 				if (fd >= 0)
 					Serialport1.usart3_send(pitchOut, yawOut, static_cast<uint8_t>(status));
+			} else {
+                if (fd >= 0)
+					Serialport1.usart3_send(static_cast<uint8_t>(250), static_cast<uint8_t>(250), static_cast<uint8_t>(10));
 			}
 
 			imshow("frame", frame);
