@@ -11,10 +11,10 @@ using namespace std;
 #define Width	800				// 视频宽
 #define Height	600				// 视频高
 
-const Mat cameraMatrix = (Mat_<double>(3, 3) << 5.415783594209042e+02, 0, 3.206666177978510e+02,
-	0, 5.404611401994315e+02, 2.422876948687574e+02, 0, 0, 1);
-const Mat distCoeffs = (Mat_<double>(1, 5) << -0.352052735773963, 0.104787681524661,
-	-0.001162907806854, -7.652280170769810e-05, 0.0);
+const Mat cameraMatrixL = (Mat_<double>(3, 3) << 958.7326269471805, 0.0, 414.90474446730957,
+	0.0, 963.1929585405643, 307.1677431460919, 0., 0., 1.);
+const Mat distCoeffL = (Mat_<double>(1, 5) << 0.09925244594814076, -0.18192645110674135,
+	-4.843643319098382E-4, 0.0021184953031879723, 0.0);
 
 VideoCapture cap;
 Mat frame;
@@ -32,6 +32,13 @@ void* thread(void *arg)
 			cap >> frame;
 	}
     return NULL;
+}
+
+void on_Mouse(int event, int x, int y, int flags, void*) {
+	if (event == EVENT_LBUTTONDOWN) {
+		targetPoint.x = x;
+		targetPoint.y = y;
+	}
 }
 
 int main()
@@ -54,6 +61,8 @@ int main()
 
 	ArUcoMarker marker;
 
+	setMouseCallback("frame", on_Mouse);
+	
 	while(true) {
 		double time0 = static_cast<double>(getTickCount());
 		if(!frame.empty()) {

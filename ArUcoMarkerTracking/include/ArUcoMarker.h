@@ -2,8 +2,8 @@
 #ifndef __ARUCOMARKER_H__
 #define __ARUCOMARKER_H__
 
-#include <opencv.hpp>
-#include <aruco.hpp>
+#include <opencv2\opencv.hpp>
+#include <opencv2\aruco.hpp>
 
 using namespace std;
 using namespace cv;
