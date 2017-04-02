@@ -64,7 +64,10 @@ void MyQueue::push(int k) {
 }
 
 int MyQueue::average() {
-	return sum / dataSize;
+	if (!dataSize)
+		return 0;
+	else
+		return sum / dataSize;
 }
 
 void MyQueue::clear() {

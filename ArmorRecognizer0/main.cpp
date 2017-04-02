@@ -144,7 +144,7 @@ int main()
 	//VideoCapture cap(fileName);
 	cap.open(1);
 	cap.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));	// 需要在设置宽高之前设置，否则无效
-	cap.set(CV_CAP_PROP_SATURATION, 80);
+	//cap.set(CV_CAP_PROP_SATURATION, 80);
 	cap.set(CAP_PROP_FRAME_WIDTH, Width);
 	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
 
@@ -365,7 +365,6 @@ int main()
 				status = 10;
 				isUniformSpeed = false;
 			}
-
 
 			yawOut = static_cast<uint8_t>(disX);
 			pitchOut = static_cast<uint8_t>(disY);
