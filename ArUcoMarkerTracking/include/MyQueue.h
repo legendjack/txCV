@@ -10,7 +10,7 @@ private:
 	std::vector<int> data;
 
 public:
-	const int max;	// 最大值
+	int max;		// 最大值
 	int min;		// 最小值
 	int dataSize;	// 队列当前的size
 	
@@ -34,29 +34,24 @@ MyQueue::MyQueue(int i) {
 
 void MyQueue::push(int k) {
 	sum += k;
-	if (dataSize == 0) {
+	if (dataSize < maxSize) {
 		data.push_back(k);
 		dataSize++;
-		min = k;
-		max = k;
-	}
-	else if (dataSize < maxSize) {
-		data.push_back(k);
-		dataSize++;
-		if (k > max)
-			max = k;
-		if (k < min)
-			min = k;
 	}
 	else {
 		sum -= data[0];
 		for (int count = 0; count < maxSize - 1; count++)
 			data[count] = data[count + 1];
 		data[maxSize - 1] = k;
-		if (k > max)
-			max = k;
-		if (k < min)
-			min = k;
+	}
+	
+	min = data[0];
+	max = data[0];
+	for (int count = 0; count < dataSize; count++) {
+		if (data[count] < min)
+			min = data[count];
+		if (data[count] > max)
+			max = data[count];
 	}
 }
 

@@ -20,7 +20,8 @@ VideoCapture cap;
 Mat frame;
 Point targetPoint(566, 315);
 Point centerOfArmor;
-MyQueue mq(200);
+MyQueue mq(20);
+MyQueue mqq(200);
 bool isUniformSpeed = false;
 uint8_t yawOut = 250;
 uint8_t pitchOut = 250;
@@ -65,11 +66,11 @@ int main()
 	setMouseCallback("frame", on_Mouse);
 
 	while(true) {
-		
+
 		double time0 = static_cast<double>(getTickCount());
 
 		cap >>frame;
-		
+
 		if(!frame.empty()) {
 
 			marker.detect(frame);
@@ -97,37 +98,37 @@ int main()
 					disY = 200;
 				else if (disY < 0)
 					disY = 0;
-				
-				mq.push(disX);
-				
+
+				if(!isUniformSpeed)
+					mq.push(disX);
+
+                mqq.push(disX);
 				Mat speedMat(200, 200, CV_8UC1, Scalar(0));
 				line(speedMat, Point(0, 100), Point(199, 100), Scalar(255), 1);
 
-				for (int i = 0; i < mq.dataSize; i++)
-					circle(speedMat, mq[i], 1, Scalar(255), -1, LINE_AA);
+				for (int i = 0; i < mqq.dataSize; i++)
+					circle(speedMat, Point(i, 199-mqq[i]), 1, Scalar(255), -1, LINE_AA);
 
 				imshow("speed", speedMat);
 
-/*
-				if(!isUniformSpeed)
-					mq.push(disX);
-*/
 				// 如果目标不在匀速运动的状态，则状态值设置10
 				int status = 10;
 
 				/* 如果目标在匀速移动，且disX大于110，则发送状态值20，云台加速追赶
 				 * 如果目标在匀速移动，且disX小于110（已经追赶上），则发送状态值15，云台匀速移动
 				 */
-/*				if (mq.dataSize == 20 && mq.min > 145 && mq.max < 170 && disX >= 110) {
+				 cout << mq.dataSize << "  " << mq.min << "  "  << mq.max << "  "<< isUniformSpeed<< endl;
+
+				if (mq.dataSize == 20 && mq.min > 120 && disX >= 80) {
+					cout << "---------------------------------------->" << endl;
 					status = 20;
 					isUniformSpeed = true;
 				}
-				else if (mq.dataSize == 20 && mq.min > 145 && mq.max < 170
-					&& disX < 110 && disX > 90 ) {
+				else if (mq.dataSize == 20 && mq.min > 120 && disX >= 80) {
 					status = 15;
 					isUniformSpeed = true;
 				}
-				else if (mq.dataSize == 20 && mq.min > 145 && mq.max < 170 && disX < 90 ) {
+				else if (mq.dataSize == 20 && mq.min > 120 &&  disX < 80 ) {
 					status = 10;
 					isUniformSpeed = false;
 				}
@@ -145,12 +146,12 @@ int main()
 					status = 10;
 					isUniformSpeed = false;
 				}
-*/
+
 				yawOut = static_cast<uint8_t>(disX);
 				pitchOut = static_cast<uint8_t>(disY);
 
 				if (fd >= 0)
-					Serialport1.usart3_send(pitchOut, yawOut, static_cast<uint8_t>(10));
+					Serialport1.usart3_send(pitchOut, yawOut, static_cast<uint8_t>(status));
 			} else {
                 if (fd >= 0)
 					Serialport1.usart3_send(static_cast<uint8_t>(250), static_cast<uint8_t>(250), static_cast<uint8_t>(10));
@@ -160,7 +161,7 @@ int main()
 			waitKey(1);
 		}
 		time0 = ((double)getTickCount() - time0) / getTickFrequency();
-		cout << "time : " << time0 * 1000 << "ms"  << endl;
+		//cout << "time : " << time0 * 1000 << "ms"  << endl;
 	}
 	return 0;
 }
