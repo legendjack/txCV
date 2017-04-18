@@ -1,3 +1,4 @@
+#include <pthread.h>
 #include "functions.h"
 #include "getConfig.h"
 #include "serialsom.h"
@@ -8,6 +9,7 @@
 #define MaxArea 2400
 #define DEBUG
 
+VideoCapture cap;
 map<string, string> config;
 bool first = true;
 Mat frame, gray_img, canny_img;
@@ -25,6 +27,7 @@ int targetNum[3] = { 0,0,1 };	// 缓存3帧的将要发送的数据，如果三个数相等，则发送
 int nineNumber_int_3frame[3] = { 0,0,1 };  // 缓存3帧九宫格数字，如果后两个数相等，则认为九宫格改变
 
 void onChanged(int, void*);
+void* capFrameThread(void *arg);
 
 int main()
 {
@@ -42,17 +45,14 @@ int main()
 		Serialport1.set_opt(115200, 8, 'N', 1);
  	else
 		cout << "open serialport : failed" << endl;
-	
-	// 初始化摄像头
-	VideoCapture cap(0);
 
 	if (!cap.isOpened()) {
 		cout << "cannot open video file" << endl;
 		return -1;
 	}
 
+	cap.open(0);
  	cap.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));
- 	cap.set(CV_CAP_PROP_FPS, 30);
  	cap.set(CAP_PROP_FRAME_WIDTH, Width);
  	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
 	
@@ -66,7 +66,7 @@ int main()
 #endif // DEBUG
 
 	/************************************************************************/
-	/*                       初始化KNearest数字识别                          */
+	/*                       初始化KNearest数字识别                         */
 	/************************************************************************/
 	FileStorage fsClassifications("classifications.xml", FileStorage::READ);  // 读取 classifications.xml 分类文件
 
@@ -104,9 +104,8 @@ int main()
 
 	while (true)
 	{
-		cap >> frame;
 		if (frame.empty())
-			break;
+			continues;
 
 		cvtColor(frame, gray_img, COLOR_BGR2GRAY);
 		Canny(gray_img, canny_img, t1, t2);
@@ -127,7 +126,7 @@ int main()
 			if (area > MinArea && area < MaxArea) {		//2000~4500
 				vector<Point> contours_poly;
 				approxPolyDP(contours0[i], contours_poly, 5, false);
-				if (contours_poly.size() <= 6)
+				if (contours_poly.size() <= 6)	// 拟合多边形，六边形以上的忽略
 					contours1.push_back(contours0[i]);
 			}
 			else if (area >(MinArea * 9 / 5) && area < (MaxArea * 9 / 5)) {	//5000~7500, 3000~3500
@@ -138,7 +137,7 @@ int main()
 			}
 		}
 
-		if (contours3.size() == 0 || contours1.size() < 9) {
+		if (contours1.size() < 9) {
 #ifdef DEBUG
 			key = waitKey(1);
 			if (key == 27)
@@ -162,7 +161,7 @@ int main()
 		vector<vector<Point> > contours4; // 面积在指定范围内的轮廓（密码区_）
 		findContours(contours_Mat1, contours4, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
 
-		if (contours4.size() == 0 || contours2.size() < 9) {
+		if (contours2.size() < 9) {
 #ifdef DEBUG
 			key = waitKey(1);
 			if (key == 27)
@@ -281,7 +280,7 @@ int main()
 		}
 
 		/************************************************************************/
-		/*                            检测密码区                                 */
+		/*                            检测密码区                                */
 		/************************************************************************/
 		
 		// 密码区的旋转矩形
@@ -472,4 +471,13 @@ void onChanged(int, void*) {
 	Canny(gray_img, canny_img, t1, t2);
 	dilate(canny_img, canny_img, element0);	// 膨胀
 	imshow("canny", canny_img);
+}
+
+void* capFrameThread(void *arg)
+{
+	while(true) {
+		if (cap.isOpened())
+			cap >> frame;
+	}
+    return NULL;
 }

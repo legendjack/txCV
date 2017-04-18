@@ -118,22 +118,6 @@ int main()
 	vector<RotatedRect> rotatedRects;			// 对面积在指定范围内的轮廓拟合椭圆，得到相应的旋转矩形
 	vector<RotatedRect> rotatedRectsOfLights;	// 蓝色/红色灯条的RotatedRect
 
-/*
-	// KalmanFilter初始化
-	KalmanFilter kf(stateNum, measureNum, 0);
-	int t = 20;
-	int t1 = 100;
-	kf.transitionMatrix = (Mat_<float>(4, 4) <<
-		1, 0, t, 0,
-		0, 1, 0, t,
-		0, 0, 1, 0,
-		0, 0, 0, 1);
-	setIdentity(kf.measurementMatrix);						// 测量矩阵H，setIdentity函数是初始化主对角线的值
-	setIdentity(kf.processNoiseCov, Scalar::all(1e-5));		// 系统噪声方差矩阵Q
-	setIdentity(kf.measurementNoiseCov, Scalar::all(1e-1));	// 测量噪声方差矩阵R
-	setIdentity(kf.errorCovPost, Scalar::all(1));			// 后验错误估计协方差矩阵P
-*/
-
 #ifdef DEBUG
 	namedWindow(WINNAME, WINDOW_AUTOSIZE);
 	createTrackbar("Threshold", WINNAME, &m_threshold, 255, 0);
@@ -371,7 +355,6 @@ int main()
 
  			if (fd >= 0)
 				sended = Serialport1.usart3_send(pitchOut, yawOut, static_cast<uint8_t>(status));	// 发送竖直方向和水平方向移动速度
-
 		} else {
 			// 检测到灯条但是没有匹配到装甲
 			frameCount++;

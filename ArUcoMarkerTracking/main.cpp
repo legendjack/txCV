@@ -117,7 +117,7 @@ int main()
 				/* 如果目标在匀速移动，且disX大于110，则发送状态值20，云台加速追赶
 				 * 如果目标在匀速移动，且disX小于110（已经追赶上），则发送状态值15，云台匀速移动
 				 */
-				 cout << mq.dataSize << "  " << mq.min << "  "  << mq.max << "  "<< isUniformSpeed<< endl;
+				cout << mq.dataSize << "  " << mq.min << "  "  << mq.max << "  "<< isUniformSpeed<< endl;
 
 				if (mq.dataSize == 20 && mq.min > 120 && disX >= 80) {
 					cout << "---------------------------------------->" << endl;

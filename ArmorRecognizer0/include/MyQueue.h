@@ -16,11 +16,12 @@ public:
 	
 	MyQueue() {};
 	MyQueue(int i);
-	~MyQueue() { data.clear(); };
+	~MyQueue() {};
 
 	void push(int k);
 	int average();
 	void clear();
+	int operator[](int i);
 };
 
 MyQueue::MyQueue(int i) {
@@ -33,33 +34,24 @@ MyQueue::MyQueue(int i) {
 
 void MyQueue::push(int k) {
 	sum += k;
-	if (dataSize == 0) {
+	if (dataSize < maxSize) {
 		data.push_back(k);
 		dataSize++;
-		min = k;
-		max = k;
-	}
-	else if (dataSize < maxSize) {
-		data.push_back(k);
-		dataSize++;
-		if (k > max)
-			max = k;
-		if (k < min)
-			min = k;
 	}
 	else {
 		sum -= data[0];
-		std::vector<int> _data(maxSize);
 		for (int count = 0; count < maxSize - 1; count++)
-			_data[count] = data[count + 1];
-		_data[maxSize - 1] = k;
-		data.clear();
-		data = _data;
-		_data.clear();
-		if (k > max)
-			max = k;
-		if (k < min)
-			min = k;
+			data[count] = data[count + 1];
+		data[maxSize - 1] = k;
+	}
+	
+	min = data[0];
+	max = data[0];
+	for (int count = 0; count < dataSize; count++) {
+		if (data[count] < min)
+			min = data[count];
+		if (data[count] > max)
+			max = data[count];
 	}
 }
 
@@ -76,6 +68,13 @@ void MyQueue::clear() {
 	sum = 0;
 	dataSize = 0;
 	data.clear();
+}
+
+int MyQueue::operator[](int i) {
+	if (i < dataSize && i >= 0)
+		return data[i];
+	else
+		return 0;
 }
 
 #endif // endif

@@ -1,3 +1,4 @@
+cmake_minimum_required(VERSION 2.8)
 #project name
 PROJECT(ArmorRecognition)
 #head file path
