@@ -99,8 +99,6 @@ int main(int argc, char** argv)
 		if (frame.empty())
 			break;
 		imshow("frame", frame);
-		
-		double time0 = static_cast<double>(getTickCount());
 
 		cvtColor(frame, gray_img, COLOR_BGR2GRAY);
 		Canny(gray_img, canny_img, t1, t2);
@@ -207,13 +205,19 @@ int main(int argc, char** argv)
 				srcPoints[3] = p[3] + Point2f(10, -4);
 
 				if (i == 0) {
-					passwordRect.x = srcPoints[0].x + 70;
-					passwordRect.y = srcPoints[0].y - 80;
-					if (passwordRect.x > Width || passwordRect.y < 0)
-						foundNixieTubeArea = false;
-					else
-						foundNixieTubeArea = true;
+					passwordRect.x = p[1].x - 20;
+					passwordRect.y = p[1].y - 80;
 				}
+				else if (i == 2) {
+					passwordRect.width = p[0].x + 15 - passwordRect.x;
+					passwordRect.height = p[0].y - 20 - passwordRect.y;
+				}
+
+				if (passwordRect.x < 0 || (passwordRect.x + passwordRect.width) > Width ||
+					passwordRect.y < 0 || (passwordRect.y + passwordRect.height) > Height)
+					foundNixieTubeArea = false;
+				else
+					foundNixieTubeArea = true;
 
 				for (int j = 0; j < 4; j++)
 					line(frame, srcPoints[j], srcPoints[(j + 1) % 4], Scalar(204, 122, 0), 2, LINE_AA);
@@ -298,6 +302,8 @@ int main(int argc, char** argv)
 		imshow("frame", frame);
 		imshow("password", pw_bin);
 
+		double time0 = static_cast<double>(getTickCount());
+		
 		for (int i = 0; i < 9; i++) {
 			hog->compute(nineRect_mat[i], descriptors);
 			Mat matROIFlattenedFloat(1, (int)(descriptors.size()), CV_32FC1, descriptors.data());
@@ -306,6 +312,9 @@ int main(int argc, char** argv)
 			nineNumber[i] = (int)matCurrentChar.at<float>(0, 0);
 		}
 
+		time0 = ((double)getTickCount() - time0) / getTickFrequency();
+		cout << "time : " << time0 * 1000 << "ms" << endl;
+		
 		for (int i = 0; i < 9; i++)
 			cout << nineNumber[i];
 		cout << endl;
@@ -316,8 +325,7 @@ int main(int argc, char** argv)
 		else if (key == 27)
 			break;
 		
-		time0 = ((double)getTickCount() - time0) / getTickFrequency();
-		cout << "time : " << time0 * 1000 << "ms" << endl;
+		
 	}
 
 	return 0;
