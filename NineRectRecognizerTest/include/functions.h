@@ -2,7 +2,7 @@
 #ifndef _FUNCTIONS_H_
 #define _FUNCTIONS_H_
 
-#include <opencv2\opencv.hpp>
+#include <opencv2/opencv.hpp>
 #include <iostream>
 
 using namespace std;
@@ -89,7 +89,7 @@ void deskew(Mat& img) {
 	double skew = mu.mu11 / mu.mu02;
 	Mat m = (Mat_<float>(2, 3) << 1, skew, -0.5 * 20 * skew, 0, 1, 0);
 
-	warpAffine(img, img, m, Size(40, 40), InterpolationFlags::WARP_INVERSE_MAP);
+	warpAffine(img, img, m, Size(40, 40), 16);
 }
 
 // 连接相近像素点

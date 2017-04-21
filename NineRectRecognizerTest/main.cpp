@@ -122,8 +122,6 @@ int main(int argc, char** argv)
 		}
 
 	 	if (contours1.size() < 9) {
-			count11++;
-			//imwrite(to_string(count11) + ".jpg", frame);
 			cout << "面积在指定范围内的轮廓数量不足" << endl;
 			for (size_t i = 0; i < areas.size(); i++)
 				if (areas[i] > 1000)
@@ -217,9 +215,9 @@ int main(int argc, char** argv)
 						foundNixieTubeArea = true;
 				}
 
-				for (int i = 0; i < 4; i++)
-					line(frame, srcPoints[i], srcPoints[(i + 1) % 4], Scalar(204, 122, 0), 2, LINE_AA);
-				putText(frame, to_string(i + 1), Point(contours_rotatedRect[i].center.x, contours_rotatedRect[i].center.y) - Point(20, 5), FONT_HERSHEY_SCRIPT_SIMPLEX, 0.6, Scalar(66, 206, 255), 2, 8);
+				for (int j = 0; j < 4; j++)
+					line(frame, srcPoints[j], srcPoints[(j + 1) % 4], Scalar(204, 122, 0), 2, LINE_AA);
+				//putText(frame, to_string(i + 1), Point(contours_rotatedRect[i].center.x, contours_rotatedRect[i].center.y) - Point(20, 5), FONT_HERSHEY_SCRIPT_SIMPLEX, 0.6, Scalar(66, 206, 255), 2, 8);
 
 				dstPoints[0] = Point2f(0, 0);
 				dstPoints[1] = Point2f(40, 0);
