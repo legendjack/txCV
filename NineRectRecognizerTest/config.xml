@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opencv_storage>
+  
+  <!-- 视频文件名 -->
+  <filename>D:\\src\\九宫格视频\\output10.avi</filename>
+
+  <Width>800</Width>
+
+  <Height>600</Height>
+
+  <!-- 单个宫格的最大面积 -->
+  <MaxArea>8000</MaxArea>
+
+  <!-- 单个宫格的最小面积 -->
+  <MinArea>4000</MinArea>
+
+  <n1>29</n1>
+  <n2>54</n2>
+  <n3>44</n3>
+  <n4>59</n4>
+  <n5>62</n5>
+  <n6>43</n6>
+  <n7>52</n7>
+  <n8>57</n8>
+  <n9>42</n9>
+
+</opencv_storage>

@@ -1,32 +1,40 @@
 #include "functions.h"
 
-#define DEBUG
-
 const int Width = 800;		// 视频宽
 const int Height = 600;		// 视频高
-const int MaxArea = 8000;	// 宫格轮廓的最大面积
-const int MinArea = 4000;	// 宫格轮廓的最小面积
+
+int MaxArea = 8000;			// 每个宫格轮廓的最大面积
+int MinArea = 4000;			// 每个宫格轮廓的最小面积
 
 VideoCapture cap;
 Mat frame, gray_img, canny_img;
-Mat element0, element1;
+Mat element0, element1, element2;
 
 int t1 = 200, t2 = 250;		// canny阈值
-int nineNumber[9];			// 九宫格区的 9 个数字
 int password[5];			// 密码区（数码管）的 5 个数字
+int nineNumber[9];			// 九宫格区的 9 个数字
+float neighborDistance[9];	// kNN 识别每个数字与最近邻居的距离，值越小说明是该值的可能性越大
+int errorCount;				// 识别错误数字的个数
 
 Rect passwordRect(0, 0, 200, 60);	// 九宫格区的 Rect
 Mat pw_gray, pw_bin;				// 密码区（数码管）的灰度图和二值图
 bool foundNixieTubeArea = false;	// 是否发现数码管区
+bool isEmpty = false;				// 宫格中是否有数字
 
 int main(int argc, char** argv)
 {
+	
+// 	cap.open(0);
+// 	cap.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));
+// 	cap.set(CAP_PROP_FRAME_WIDTH, Width);
+// 	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
 	cap.open("output3.avi");
-	cap.set(CAP_PROP_POS_FRAMES, 2 * 30);
+	cap.set(CAP_PROP_POS_FRAMES, 10 * 30);
 
-	element0 = getStructuringElement(MORPH_ELLIPSE, Size(2, 2));
+	element0 = getStructuringElement(MORPH_ELLIPSE, Size(3, 3));
 	element1 = getStructuringElement(MORPH_ELLIPSE, Size(5, 5));
-
+	element2 = getStructuringElement(MORPH_ELLIPSE, Size(2, 2));
+	
 	/************************************************************************/
 	/*                     初始化KNearest数字识别（手写体）                   */
 	/************************************************************************/
@@ -94,7 +102,6 @@ int main(int argc, char** argv)
 	/************************************************************************/
 	while (cap.isOpened()) {
 		cap >> frame;
-		//imwrite("frame.jpg", frame);
 
 		if (frame.empty())
 			break;
@@ -105,6 +112,7 @@ int main(int argc, char** argv)
 		dilate(canny_img, canny_img, element0);	// 膨胀
 		imshow("canny", canny_img);
 
+		// 寻找所有轮廓
 		vector<vector<Point> > contours0;		// 所有轮廓
 		findContours(canny_img, contours0, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
 
@@ -187,7 +195,9 @@ int main(int argc, char** argv)
 			contours_rotatedRect = contours_rotatedRect_tmp;
 		}
 
+		// 找到了九个宫格的位置，提取对应ROI，用于识别
 		vector<Mat> nineRect_mat(9);	// 经过阈值分割和膨胀处理的九宫格（数字）的Mat
+		isEmpty = false;
 		if (contours_rotatedRect.size() == 9) {
 			sortRotatedRect(contours_rotatedRect);	// 把9个旋转矩形按照顺序排序
 			// 对于每个旋转矩形，找到其四个顶点，使用仿射变换将其变换为正矩形
@@ -204,6 +214,7 @@ int main(int argc, char** argv)
 				srcPoints[2] = p[2] + Point2f(-10, -4);
 				srcPoints[3] = p[3] + Point2f(10, -4);
 
+				// 利用第一个宫格的右上角和第三个宫格的左上角来定位密码区（数码管）的位置，得到相应的Rect
 				if (i == 0) {
 					passwordRect.x = p[1].x - 20;
 					passwordRect.y = p[1].y - 80;
@@ -235,16 +246,139 @@ int main(int argc, char** argv)
 				Mat dstImage(40, 40, CV_8UC1, Scalar(0));
 				warpPerspective(gray_img, dstImage, warpMat, dstImage.size());
 
+				// 九宫格内的数字在两次变换之间有短暂时间没有内容（空白）
+				// 这里通过最低灰度值来判断是否存在数字
+				if (i == 0 && min_mat(dstImage) > 80) {
+					cout << "宫格内没有数字" << endl;
+					isEmpty = true;
+				}
+
 				threshold(dstImage, nineRect_mat[i], 0, 255, THRESH_OTSU);
-				threshold(nineRect_mat[i], nineRect_mat[i], 100, 255, THRESH_BINARY_INV);
+				threshold(nineRect_mat[i], nineRect_mat[i], 50, 255, THRESH_BINARY_INV);
 				dilate(nineRect_mat[i], nineRect_mat[i], element0);		// 膨胀
-				deskew(nineRect_mat[i]);
+				deskew(nineRect_mat[i]);	// 抗扭斜处理
 				blur(nineRect_mat[i], nineRect_mat[i], Size(3, 3));
 			}
 		}
 		else {
 			continue;
 		}
+
+		// 如果第一个宫格中没有数字，则跳过该帧
+		if (isEmpty)
+			continue;
+
+		/************************************************************************/
+		/*                         kNN识别九宫格区数字                          */
+		/************************************************************************/
+		for (int i = 0; i < 9; i++) {
+			hog->compute(nineRect_mat[i], descriptors);
+			Mat matROIFlattenedFloat(1, (int)(descriptors.size()), CV_32FC1, descriptors.data());
+			Mat matCurrentChar(0, 0, CV_32F);  // findNearest的结果保存在这里
+			Mat m1(0, 0, CV_32F);
+			Mat m2(0, 0, CV_32F);
+			kNearest->findNearest(matROIFlattenedFloat, 1, matCurrentChar, m1, m2);
+			nineNumber[i] = (int)matCurrentChar.at<float>(0, 0);	// 保存九宫格区的九个数字
+			neighborDistance[i] = m2.at<float>(0, 0);
+
+// 			cout << matCurrentChar << endl;
+// 			cout << m1 << endl;
+// 			cout << m2 << endl << endl;
+		}
+		
+		/* 判断九宫格的识别结果，如果出现有两个数字相同的情况，则说明有一个数字识别错误
+		 * 首先找出有多少个数字识别错误
+		 */
+		errorCount = 0;
+		vector<int> errorPair;
+		for (int i = 0; i < 8; i++) {
+			for (int j = i + 1; j < 9; j++) {
+				if (nineNumber[i] == nineNumber[j]) {
+					errorCount++;
+					errorPair.push_back(i);
+					errorPair.push_back(j);
+					cout << i + 1 << " " << nineNumber[i] << " " << neighborDistance[i] << endl;
+					cout << j + 1 << " " << nineNumber[j] << " " << neighborDistance[j] << endl;
+				}
+			}
+		}
+
+		if (errorCount == 1) {
+			/* 如果只有一个数字识别错误，比较这两个数字属于识别值得可能性
+			 * 如果 neighborDistance[j] 的值更大，说明 nineNumber[j] 识别错误（的可能性更大）
+			 * 先将其赋值为 0，然后计算数组 nineNumber 所有元素的和 sum
+			 * 最后用 45 - sum 即为缺失的值（45是1~9的和），也就是识别错误的数字
+			 */
+			if (neighborDistance[errorPair[0]] < neighborDistance[errorPair[1]]) {
+				nineNumber[errorPair[1]] = 0;
+				int sum = 0;
+				for (int k = 0; k < 9; k++)
+					sum += nineNumber[k];
+				int missingNumber = 45 - sum;
+				nineNumber[errorPair[1]] = missingNumber;
+			}
+			else {
+				nineNumber[errorPair[0]] = 0;
+				int sum = 0;
+				for (int k = 0; k < 9; k++)
+					sum += nineNumber[k];
+				int missingNumber = 45 - sum;
+				nineNumber[errorPair[0]] = missingNumber;
+			}
+		}
+		else if (errorCount == 2) {
+			/* 如果有两个数字识别错误，首先找到识别错误的两个数字的编号，再找到数组中缺失的两个数
+			 * 然后再次调用 kNearest->findNearest() ，不过这次将 k 值设为 3，找到 三个最近的邻居
+			 * 然后分析这三个邻居中是否有那两个缺失的值，如果有则把两个识别错误的数字和缺失的两个数
+			 * 对应起来
+			 */
+			int a1[2];	// 两个识别错误的数字的编号
+			int b1[2];	// 未识别出的两个数字
+
+			if (neighborDistance[errorPair[0]] < neighborDistance[errorPair[1]])
+				a1[0] = errorPair[1];
+			else
+				a1[0] = errorPair[0];
+
+			if (neighborDistance[errorPair[2]] < neighborDistance[errorPair[3]])
+				a1[1] = errorPair[3];
+			else
+				a1[1] = errorPair[2];
+
+			findMissingNumber(nineNumber, b1, 2);
+
+			hog->compute(nineRect_mat[a1[0]], descriptors);
+			Mat matROIFlattenedFloat(1, (int)(descriptors.size()), CV_32FC1, descriptors.data());
+			Mat matCurrentChar(0, 0, CV_32F);  // findNearest的结果保存在这里
+			Mat m1(0, 0, CV_32F);
+			Mat m2(0, 0, CV_32F);
+			kNearest->findNearest(matROIFlattenedFloat, 3, matCurrentChar, m1, m2);
+
+			for (int i = 0; i < 3; i++) {
+				for (int j = 0; j < 2; j++) {
+					if ((int)m1.at<float>(0, i) == b1[j]) {
+						nineNumber[a1[0]] = b1[j];
+						nineNumber[a1[1]] = b1[1-j];
+						goto HERE;
+					}
+				}
+			}
+
+			hog->compute(nineRect_mat[a1[1]], descriptors);
+			kNearest->findNearest(matROIFlattenedFloat, 3, matCurrentChar, m1, m2);
+
+			for (int i = 1; i < 3; i++) {
+				for (int j = 0; j < 2; j++) {
+					if ((int)m1.at<float>(0, i) == b1[j]) {
+						nineNumber[a1[1]] = b1[j];
+						nineNumber[a1[0]] = b1[1 - j];
+						goto HERE;
+					}
+				}
+			}
+		}
+
+	HERE:
 
 		Mat nineNumberMat(120, 120, CV_8UC1);
 		for (int i = 0; i < 3; i++)
@@ -255,13 +389,11 @@ int main(int argc, char** argv)
 		if (!foundNixieTubeArea)
 			continue;
 
-		/************************************************************************/
-		/*                     检测密码区（数码管）                               */
-		/************************************************************************/
+		// 由数码管区的 passwordRect 得到相应的ROI，并做一些预处理
 		pw_gray = gray_img(passwordRect);
 		threshold(pw_gray, pw_bin, 200, 255, THRESH_BINARY);
-		erode(pw_bin, pw_bin, element0);
-		dilate(pw_bin, pw_bin, element1);
+		erode(pw_bin, pw_bin, element2);		// 腐蚀
+		dilate(pw_bin, pw_bin, element1);		// 膨胀
 		connectClosedPoint(pw_bin);
 
 		Mat pw_bin_ = pw_bin.clone();
@@ -276,15 +408,21 @@ int main(int argc, char** argv)
 				ninxiTubeNumbRect.push_back(tmpRect);
 		}
 
+		imshow("frame", frame);
+		imshow("password", pw_bin);
+
 		if (ninxiTubeNumbRect.size() == 5) {
 			sortRect(ninxiTubeNumbRect);
 		}
 		else {
-			waitKey(1);
 			cout << "数码管识别错误，ninxiTubeNumbRect.size() = " << ninxiTubeNumbRect.size() << endl;
+			waitKey(10);
 			continue;
 		}
 		
+		/************************************************************************/
+		/*                     kNN识别密码区（数码管）数字                        */
+		/************************************************************************/
 		for (int i = 0; i < 5; i++) {
 			Mat matROI = pw_bin(ninxiTubeNumbRect[i]);
 			resize(matROI, matROI, Size(40, 40));
@@ -292,40 +430,23 @@ int main(int argc, char** argv)
 			Mat matROIFlattenedFloat(1, (int)(descriptors1.size()), CV_32FC1, descriptors1.data());
 			Mat matCurrentChar(0, 0, CV_32F);
 			kNearest1->findNearest(matROIFlattenedFloat, 1, matCurrentChar);
-			password[i] = (int)matCurrentChar.at<float>(0, 0);
+			password[i] = (int)matCurrentChar.at<float>(0, 0);		// 保存密码区的五个数字
 		}
 
+		// 打印输出密码区和九宫格区的数字
 		for (int i = 0; i < 5; i++)
 			cout << password[i];
 		cout << "-->";
 
-		imshow("frame", frame);
-		imshow("password", pw_bin);
-
-		double time0 = static_cast<double>(getTickCount());
-		
-		for (int i = 0; i < 9; i++) {
-			hog->compute(nineRect_mat[i], descriptors);
-			Mat matROIFlattenedFloat(1, (int)(descriptors.size()), CV_32FC1, descriptors.data());
-			Mat matCurrentChar(0, 0, CV_32F);  // findNearest的结果保存在这里
-			kNearest->findNearest(matROIFlattenedFloat, 1, matCurrentChar);
-			nineNumber[i] = (int)matCurrentChar.at<float>(0, 0);
-		}
-
-		time0 = ((double)getTickCount() - time0) / getTickFrequency();
-		cout << "time : " << time0 * 1000 << "ms" << endl;
-		
 		for (int i = 0; i < 9; i++)
 			cout << nineNumber[i];
 		cout << endl;
 
-		int key = waitKey(1);
+		int key = waitKey(100);
 		if (key == 32)
 			waitKey(0);
 		else if (key == 27)
 			break;
-		
-		
 	}
 
 	return 0;
@@ -333,5 +454,5 @@ int main(int argc, char** argv)
 /*
 double time0 = static_cast<double>(getTickCount());
 time0 = ((double)getTickCount() - time0) / getTickFrequency();
-cout << "time : " << time0 * 1000 << "ms" << endl;
+cout << "用时" << time0 * 1000 << "毫秒" << endl;
 */

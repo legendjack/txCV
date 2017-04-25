@@ -64,20 +64,24 @@ void sortRotatedRect(vector<RotatedRect>& contours_rotatedRect_)
 					swap(contours_rotatedRect_[3 * k + j], contours_rotatedRect_[3 * k + j + 1]);
 }
 
+// 检测宫格的内容是否为空白，返回 40*40 的	ROI 中白色像素点的数量
 int sum_mat(Mat m_) {
 	int sum_value = 0;
-	int sum_max = 0;
-	for (int i = 0; i < 160; i++) {
-		if (m_.data[i] > 0) {
+	for (int i = 0; i < 800; i++)
+		if (m_.data[i])
 			sum_value++;
-			if (sum_value > sum_max)
-				sum_max = sum_value;
-		}
-		else
-			sum_value = 0;
-	}
 
-	return sum_max;
+	return sum_value;
+}
+
+// 返回一个宫格 ROI 中最低的灰度值
+int  min_mat(Mat m_) {
+	int min_value = 255;
+	for (int i = 0; i < 800; i++)
+		if (m_.data[i] < min_value)
+			min_value = m_.data[i];			
+	
+	return min_value;
 }
 
 // 抗扭斜处理
@@ -103,4 +107,25 @@ void connectClosedPoint(Mat& m) {
 	}
 }
 
+// 判断数字 a 是否属于数组 b
+bool isBelongTo(int a, int* b) {
+	for (int i = 0; i < 9; i++) {
+		if (a == b[i])
+			return true;
+	}
+	return false;
+}
+
+// 以数组 b 的形式，返回数组 a 中缺少的 n 个数字
+void findMissingNumber(int* a, int* b, int n) {
+	int aa = 0;
+	for (int i = 1; i < 10; i++) {
+		if (!isBelongTo(i, a)) {
+			b[aa] = i;
+			aa++;
+			if (aa == n)
+				return;
+		}
+	}
+}
 #endif
