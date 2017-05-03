@@ -1,4 +1,7 @@
 #include "functions.h"
+#include "serialsom.h"
+
+#define DEBUG
 
 const int Width = 800;		// 视频宽
 const int Height = 600;		// 视频高
@@ -21,12 +24,22 @@ Mat pw_gray, pw_bin;				// 密码区（数码管）的灰度图和二值图
 bool foundNixieTubeArea = false;	// 是否发现数码管区
 bool isEmpty = false;				// 宫格中是否有数字
 
+int nineRectNumber = 0;				// 由九宫格前两位数字组成的两位数，如果变化则表示九宫格区改变
+int targetRect = 1;					// 当前目标宫格，1~9
+
 int main(int argc, char** argv)
 {
+	// 初始化串口类
+	Serialport Serialport1("/dev/ttyTHS0");
+	int fd = Serialport1.open_port("/dev/ttyTHS0");
+	if (fd >= 0)
+		Serialport1.set_opt(115200, 8, 'N', 1);
+ 	else
+		cout << "open serialport : failed" << endl;
 	
 // 	cap.open(0);
 // 	cap.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));
-// 	cap.set(CAP_PROP_FRAME_WIDTH, Width);
+//	cap.set(CAP_PROP_FRAME_WIDTH, Width);
 // 	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
 	cap.open("output3.avi");
 	cap.set(CAP_PROP_POS_FRAMES, 10 * 30);
@@ -105,6 +118,7 @@ int main(int argc, char** argv)
 
 		if (frame.empty())
 			break;
+		
 		imshow("frame", frame);
 
 		cvtColor(frame, gray_img, COLOR_BGR2GRAY);
@@ -129,10 +143,6 @@ int main(int argc, char** argv)
 
 	 	if (contours1.size() < 9) {
 			cout << "面积在指定范围内的轮廓数量不足" << endl;
-			for (size_t i = 0; i < areas.size(); i++)
-				if (areas[i] > 1000)
-					cout << areas[i] << " ";
-			cout << endl;
 			continue;
 		}
 
@@ -255,8 +265,16 @@ int main(int argc, char** argv)
 
 				threshold(dstImage, nineRect_mat[i], 0, 255, THRESH_OTSU);
 				threshold(nineRect_mat[i], nineRect_mat[i], 50, 255, THRESH_BINARY_INV);
-				dilate(nineRect_mat[i], nineRect_mat[i], element0);		// 膨胀
+				dilate(nineRect_mat[i], nineRect_mat[i], element2);		// 膨胀
 				deskew(nineRect_mat[i]);	// 抗扭斜处理
+				Mat matROI_ = nineRect_mat[i].clone();
+				vector<vector<Point> > contours;
+				findContours(matROI_, contours, RETR_CCOMP, CHAIN_APPROX_SIMPLE);
+				if (contours.size() > 1)
+					findAllContour(nineRect_mat[i], contours);
+				Rect rect_ = boundingRect(contours[0]);
+				Mat mattmp = nineRect_mat[i](rect_).clone();
+				resize(mattmp, nineRect_mat[i], Size(40, 40));
 				blur(nineRect_mat[i], nineRect_mat[i], Size(3, 3));
 			}
 		}
@@ -280,10 +298,6 @@ int main(int argc, char** argv)
 			kNearest->findNearest(matROIFlattenedFloat, 1, matCurrentChar, m1, m2);
 			nineNumber[i] = (int)matCurrentChar.at<float>(0, 0);	// 保存九宫格区的九个数字
 			neighborDistance[i] = m2.at<float>(0, 0);
-
-// 			cout << matCurrentChar << endl;
-// 			cout << m1 << endl;
-// 			cout << m2 << endl << endl;
 		}
 		
 		/* 判断九宫格的识别结果，如果出现有两个数字相同的情况，则说明有一个数字识别错误
@@ -304,26 +318,46 @@ int main(int argc, char** argv)
 		}
 
 		if (errorCount == 1) {
-			/* 如果只有一个数字识别错误，比较这两个数字属于识别值得可能性
-			 * 如果 neighborDistance[j] 的值更大，说明 nineNumber[j] 识别错误（的可能性更大）
-			 * 先将其赋值为 0，然后计算数组 nineNumber 所有元素的和 sum
-			 * 最后用 45 - sum 即为缺失的值（45是1~9的和），也就是识别错误的数字
+			/* 如果只有一个数字识别错误，再次使用 kNearest->findNearest 寻找 3 个近邻
+			 * 如果其中一个数字的 3 个近邻为同一个值，则认为该值正确，另一个值错误
+			 */
+			for (int i = 0; i < 2; i++) {
+				hog->compute(nineRect_mat[errorPair[i]], descriptors);
+				Mat matROIFlattenedFloat(1, (int)(descriptors.size()), CV_32FC1, descriptors.data());
+				Mat matCurrentChar(0, 0, CV_32F);  // findNearest的结果保存在这里
+				Mat m1(0, 0, CV_32F);
+				Mat m2(0, 0, CV_32F);
+				kNearest->findNearest(matROIFlattenedFloat, 3, matCurrentChar, m1, m2);
+
+				int as[3] = { (int)m1.at<float>(0, 0), (int)m1.at<float>(0, 1), (int)m1.at<float>(0, 2) };
+				if (as[0] == as[1] && as[1] == as[2]) {
+					nineNumber[errorPair[1 - i]] = 0;
+					int sum = 0;
+					for (int k = 0; k < 9; k++)
+						sum += nineNumber[k];
+					nineNumber[errorPair[1 - i]] = 45 - sum;
+					goto HERE;
+				}
+			}
+
+			/* 如果 3 个近邻不都一样，比较这两个数字属于识别值得可能性
+			 * 如果 neighborDistance[j] 的值更大，说明 nineNumber[j] 识别错误
+			 * 先将其赋值为 0，然后计算数组 nineNumber 每个值得和 sum
+			 * 最后用 45 - sum 即为缺失的值（45是1~9的和）
 			 */
 			if (neighborDistance[errorPair[0]] < neighborDistance[errorPair[1]]) {
 				nineNumber[errorPair[1]] = 0;
 				int sum = 0;
 				for (int k = 0; k < 9; k++)
 					sum += nineNumber[k];
-				int missingNumber = 45 - sum;
-				nineNumber[errorPair[1]] = missingNumber;
+				nineNumber[errorPair[1]] = 45 - sum;
 			}
 			else {
 				nineNumber[errorPair[0]] = 0;
 				int sum = 0;
 				for (int k = 0; k < 9; k++)
 					sum += nineNumber[k];
-				int missingNumber = 45 - sum;
-				nineNumber[errorPair[0]] = missingNumber;
+				nineNumber[errorPair[0]] = 45 - sum;
 			}
 		}
 		else if (errorCount == 2) {
@@ -416,7 +450,7 @@ int main(int argc, char** argv)
 		}
 		else {
 			cout << "数码管识别错误，ninxiTubeNumbRect.size() = " << ninxiTubeNumbRect.size() << endl;
-			waitKey(10);
+			waitKey(1);
 			continue;
 		}
 		
@@ -433,6 +467,22 @@ int main(int argc, char** argv)
 			password[i] = (int)matCurrentChar.at<float>(0, 0);		// 保存密码区的五个数字
 		}
 
+		if ((nineNumber[0] * 10 + nineNumber[1]) != nineRectNumber) {
+			for (int i = 0; i < 9; i++) {
+				if (targetRect == nineNumber[i]) {
+					Serialport1.usart3_send(static_cast<uint8_t>(i + 1));
+					cout << "targetNum : " << targetRect << "-->" << i + 1 << endl;
+					break;
+				}
+			}
+			if (targetRect < 9)
+				targetRect++;
+			else
+				targetRect = 1;
+			
+			nineRectNumber = nineNumber[0] * 10 + nineNumber[1];
+		}
+		
 		// 打印输出密码区和九宫格区的数字
 		for (int i = 0; i < 5; i++)
 			cout << password[i];
@@ -440,9 +490,9 @@ int main(int argc, char** argv)
 
 		for (int i = 0; i < 9; i++)
 			cout << nineNumber[i];
-		cout << endl;
+		cout << endl << endl;
 
-		int key = waitKey(100);
+		int key = waitKey(1);
 		if (key == 32)
 			waitKey(0);
 		else if (key == 27)

@@ -128,4 +128,120 @@ void findMissingNumber(int* a, int* b, int n) {
 		}
 	}
 }
+
+// 手写数字骨干提取（笔划粗细为 1 像素）
+void chao_thinimage(Mat &srcimage) {
+	vector<Point> deletelist1;
+	int Zhangmude[9];		// 记录第 i 列、第 j 行的像素及其周围共九个像素的像素值，如果是255则对应值赋为1，否则赋为0
+	int nl = 40;			// 图像高
+	int nc = 40;			// 图像宽
+	while (true)
+	{
+		for (int j = 1; j < (nl - 1); j++)
+		{
+			// 图像连续三行的行首指针
+			uchar* data_last = srcimage.ptr<uchar>(j - 1);
+			uchar* data = srcimage.ptr<uchar>(j);
+			uchar* data_next = srcimage.ptr<uchar>(j + 1);
+			for (int i = 1; i < (nc - 1); i++)
+			{
+				// data[i] 是图像第 j 行，第 i 列的像素值
+				if (data[i] == 255)
+				{
+					// 按照顺时针的顺序
+					Zhangmude[0] = 1;
+					Zhangmude[1] = (data_last[i] == 255) ? 1 : 0;		// 上方
+					Zhangmude[2] = (data_last[i + 1] == 255) ? 1 : 0;	// 右上角
+					Zhangmude[3] = (data[i + 1] == 255) ? 1 : 0;		// 右方
+					Zhangmude[4] = (data_next[i + 1] == 255) ? 1 : 0;	// 右下方
+					Zhangmude[5] = (data_next[i] == 255) ? 1 : 0;		// 下方
+					Zhangmude[6] = (data_next[i - 1] == 255) ? 1 : 0;	// 左下方
+					Zhangmude[7] = (data[i - 1] == 255) ? 1 : 0;		// 左方
+					Zhangmude[8] = (data_last[i - 1] == 255) ? 1 : 0;	// 左上方
+
+					int whitepointtotal = 0;
+					for (int k = 1; k < 9; k++)
+						whitepointtotal += Zhangmude[k];
+
+					if ((whitepointtotal >= 2) && (whitepointtotal <= 6)) {
+						int ap = 0;
+						for (int k = 1; k < 9; k++)
+							if (!Zhangmude[k] && Zhangmude[k % 8 + 1])
+								ap++;
+
+						if (ap == 1)
+							if ((Zhangmude[1] * Zhangmude[7] * Zhangmude[5] == 0) && (Zhangmude[3] * Zhangmude[5] * Zhangmude[7] == 0))
+								deletelist1.push_back(Point(i, j));
+					}
+				}
+			}
+		}
+
+		if (deletelist1.size() == 0) break;
+		for (size_t i = 0; i < deletelist1.size(); i++) {
+			Point tem;
+			tem = deletelist1[i];
+			uchar* data = srcimage.ptr<uchar>(tem.y);
+			data[tem.x] = 0;
+		}
+		deletelist1.clear();
+
+		for (int j = 1; j < (nl - 1); j++) {
+			uchar* data_last = srcimage.ptr<uchar>(j - 1);
+			uchar* data = srcimage.ptr<uchar>(j);
+			uchar* data_next = srcimage.ptr<uchar>(j + 1);
+			for (int i = 1; i < (nc - 1); i++)
+			{
+				if (data[i] == 255)
+				{
+					Zhangmude[0] = 1;
+					Zhangmude[1] = (data_last[i] == 255) ? 1 : 0;		// 上方
+					Zhangmude[2] = (data_last[i + 1] == 255) ? 1 : 0;	// 右上角
+					Zhangmude[3] = (data[i + 1] == 255) ? 1 : 0;		// 右方
+					Zhangmude[4] = (data_next[i + 1] == 255) ? 1 : 0;	// 右下方
+					Zhangmude[5] = (data_next[i] == 255) ? 1 : 0;		// 下方
+					Zhangmude[6] = (data_next[i - 1] == 255) ? 1 : 0;	// 左下方
+					Zhangmude[7] = (data[i - 1] == 255) ? 1 : 0;		// 左方
+					Zhangmude[8] = (data_last[i - 1] == 255) ? 1 : 0;	// 左上方
+
+					int whitepointtotal = 0;
+					for (int k = 1; k < 9; k++)
+						whitepointtotal += Zhangmude[k];
+
+					if ((whitepointtotal >= 2) && (whitepointtotal <= 6)) {
+						int ap = 0;
+						for (int k = 1; k < 9; k++)
+							if (!Zhangmude[k] && Zhangmude[k % 8 + 1])
+								ap++;
+
+						if (ap == 1)
+							if ((Zhangmude[1] * Zhangmude[3] * Zhangmude[5] == 0) && (Zhangmude[3] * Zhangmude[1] * Zhangmude[7] == 0))
+								deletelist1.push_back(Point(i, j));
+					}
+				}
+			}
+		}
+
+		if (deletelist1.size() == 0) break;
+		for (size_t i = 0; i < deletelist1.size(); i++) {
+			Point tem;
+			tem = deletelist1[i];
+			uchar* data = srcimage.ptr<uchar>(tem.y);
+			data[tem.x] = 0;
+		}
+		deletelist1.clear();
+	}
+}
+
+// 找到图中所有白色像素共同的轮廓
+void findAllContour(Mat src, vector<vector<Point> > & contours) {
+	contours.clear();
+	vector<Point> points_;
+	for (int i = 0; i < 40; i++)
+		for (int j = 0; j < 40; j++)
+			if (src.at<uchar>(i, j))
+				points_.push_back(Point(j, i));
+	contours.push_back(points_);
+}
+
 #endif
