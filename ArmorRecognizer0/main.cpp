@@ -58,7 +58,7 @@ int frameCount = 150;
 int lightsCount = 0;			// 图像中装甲灯条的数量
 bool findArmor;
 bool sended;					// 串口信息是否已经发送
-Point targetPoint(566, 315);
+Point targetPoint(390, 342);
 Point centerOfArmor;
 MyQueue mq(20);
 bool isUniformSpeed = false;
@@ -71,9 +71,9 @@ int sizeHist = 180;				// 180个色度，calcHist参数
 MatND dstHist;					// calcHist结果
 
 // 卡尔曼滤波器参数
-const int stateNum = 4;			// 状态值4×1向量(x,y,△x,△y)
-const int measureNum = 2;		// 测量值2×1向量(x,y)
-Mat measurement = Mat::zeros(measureNum, 1, CV_32F); // 初始测量值x'(0)，因为后面要更新这个值，所以必须先定义
+//const int stateNum = 4;			// 状态值4×1向量(x,y,△x,△y)
+//const int measureNum = 2;		// 测量值2×1向量(x,y)
+//Mat measurement = Mat::zeros(measureNum, 1, CV_32F); // 初始测量值x'(0)，因为后面要更新这个值，所以必须先定义
 
 void on_Mouse(int event, int x, int y, int flags, void*);
 void* capFrameThread(void *arg);
@@ -126,8 +126,8 @@ int main()
 #endif
 
 	//VideoCapture cap(fileName);
-	cap.open(1);
-	cap.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));	// 需要在设置宽高之前设置，否则无效
+	cap.open(0);
+	//cap.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));	// 需要在设置宽高之前设置，否则无效
 	//cap.set(CV_CAP_PROP_SATURATION, 80);
 	cap.set(CAP_PROP_FRAME_WIDTH, Width);
 	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
@@ -174,7 +174,7 @@ int main()
 		Mat binaryImage_ = binaryImage.clone();  // 二值图像备份，调试用
 #endif
 		vector<vector<Point> > contours;		// 所有轮廓，findContours函数的结果
-		findContours(binaryImage, contours, RETR_EXTERNAL, CHAIN_APPROX_NONE);	// 寻找轮廓
+		findContours(binaryImage, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);	// 寻找轮廓
 
 		vector<vector<Point> > contoursInAreaRange;	// 面积在(MinContourArea, MaxContourArea)范围内的轮廓
 		for (int i = 0; i < contours.size(); i++) {
@@ -237,7 +237,7 @@ int main()
 		if (rotatedRectsOfLights.size() == 0) {
 			// 如果某一帧开始没有检测到装甲，frameCount自加一
             frameCount++;
-            if (frameCount >= 150) {
+            if (frameCount >= 100) {
 				// 如果连续150帧没有检测到装甲，则认定为没有目标，串口发送信息进入搜索模式
                 frameCount--;
                 pitchOut = 250;
@@ -255,8 +255,8 @@ int main()
 			ellipse(frame_, rotatedRectsOfLights[i], Scalar(0, 255, 0), 2, LINE_AA);
 #endif
 
-        tmpAngle0 = 10;
-		tmpAngle1 = 170;
+        tmpAngle0 = 10;		// 两个灯条的角度差（绝对值），如果是这种情况：// 或 \\ ，则角度差在10以内有可能是一对装甲
+		tmpAngle1 = 170;	// 如果是这种情况：/\ 或 \/ ，则角度差大于170度可能是一对装甲
 		findArmor = false;
 		// 寻找属于一个装甲的两个灯条，从而确定装甲的位置
 		for (int i = 0; i < rotatedRectsOfLights.size() - 1; i++) {
@@ -278,7 +278,8 @@ int main()
 					circle(frame_, rotatedRectsOfLights[j].center, 3, Scalar(0, 0, 255), -1, LINE_AA);
 #endif
 					centerOfArmor = centerOf2Points(rotatedRectsOfLights[i].center, rotatedRectsOfLights[j].center);
-					//targetPoint.x = 17 * rotatedRectHeight / 21 + 311;
+					
+					// 更新 tmpAngle0 和 tmpAngle1，目的是找到角度差最小的一对灯条，认为它们属于一个装甲
 					if (angleDifference < 10)
 						tmpAngle0 = angleDifference;
 					else if (angleDifference > 170)

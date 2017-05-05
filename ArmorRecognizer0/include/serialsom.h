@@ -22,10 +22,10 @@ using namespace std;
 class Serialport
 {
 public:
-        Serialport(char *port);//定义Serialport类的成员函数，
+        Serialport(const char *port);//定义Serialport类的成员函数，
 
         ~ Serialport();
-        int open_port(char *port); //
+        int open_port(const char *port); //
         int set_opt(int nSpeed = 115200 , int nBits = 8, char nEvent ='N', int nStop = 1);
         bool UART0_Send(uint8_t *str);
         bool UART0_Twist_Sent(short liner_x,short liner_y,short angular_z);
@@ -48,7 +48,7 @@ private:
 //       open_port()成员函数可以打开一个串口，set_opt()更改参数。
 //@example:open_port("/dev/ttyUSB0");
 //         set_opt(115200, 8, 'N', 1);
-Serialport::Serialport(char *port)
+Serialport::Serialport(const char *port)
 {
         open_port(port);
         set_opt();
@@ -61,7 +61,7 @@ bool Serialport::UART0_INIT(void)
 return serial_sucess;
 }
 //Serialport下的成员函数open_port()的实现；
-int Serialport::open_port(  char*port)
+int Serialport::open_port(const char*port)
 {
 
     fd = open(port , O_RDWR|O_NOCTTY|O_NDELAY);
