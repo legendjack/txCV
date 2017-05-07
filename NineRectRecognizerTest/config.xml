@@ -1,27 +1,22 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0"?>
 <opencv_storage>
   
   <!-- 视频文件名 -->
-  <filename>D:\\src\\九宫格视频\\output10.avi</filename>
+  <filename>"16.avi"</filename>
 
+  <!-- 宫格内的最低灰度值，低于该灰度值则认为没有数字 -->
+  <minGrayValue>30</minGrayValue>
+
+  <!-- Canny 阈值 -->
+  <t1>80</t1>
+  <t2>180</t2>
+  
+  <!-- 相机分辨率 -->
   <Width>800</Width>
-
   <Height>600</Height>
 
-  <!-- 单个宫格的最大面积 -->
+  <!-- 单个宫格的最大、最小面积 -->
   <MaxArea>8000</MaxArea>
-
-  <!-- 单个宫格的最小面积 -->
   <MinArea>4000</MinArea>
-
-  <n1>29</n1>
-  <n2>54</n2>
-  <n3>44</n3>
-  <n4>59</n4>
-  <n5>62</n5>
-  <n6>43</n6>
-  <n7>52</n7>
-  <n8>57</n8>
-  <n9>42</n9>
 
 </opencv_storage>

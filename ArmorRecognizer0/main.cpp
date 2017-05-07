@@ -173,8 +173,11 @@ int main()
 #ifdef DEBUG
 		Mat binaryImage_ = binaryImage.clone();  // 二值图像备份，调试用
 #endif
+
+		// 寻找轮廓，注意参数四不能设为 CHAIN_APPROX_SIMPLE，因为如果如果这样设置，表示一个轮廓的点的数量可能少于4
+		// 而 fitEllipse 函数要求点的数量不能小于 4 ，否则会报错
 		vector<vector<Point> > contours;		// 所有轮廓，findContours函数的结果
-		findContours(binaryImage, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);	// 寻找轮廓
+		findContours(binaryImage, contours, RETR_EXTERNAL, CHAIN_APPROX_NONE);
 
 		vector<vector<Point> > contoursInAreaRange;	// 面积在(MinContourArea, MaxContourArea)范围内的轮廓
 		for (int i = 0; i < contours.size(); i++) {
@@ -185,8 +188,12 @@ int main()
 
 		// 如果面积在指定范围内的轮廓数量小于2，则进入下一次循环
 		if (contoursInAreaRange.size() < 2) {
-			yawOut = 250;
-			pitchOut = 250;
+			frameCount++;
+            if (frameCount >= 100) {
+				frameCount--;
+				yawOut = 250;
+				pitchOut = 250;
+			}
 			goto HERE;
 		}
 

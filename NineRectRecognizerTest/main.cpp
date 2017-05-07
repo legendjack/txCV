@@ -8,6 +8,7 @@ const int Height = 600;		// 视频高
 
 int MaxArea = 8000;			// 每个宫格轮廓的最大面积
 int MinArea = 4000;			// 每个宫格轮廓的最小面积
+int minGrayValue;			// 宫格内的最低灰度值，如果小于该值则认为宫格内没有内容（数字）
 
 VideoCapture cap;
 Mat frame, gray_img, canny_img;
@@ -29,7 +30,7 @@ int targetRect = 1;					// 当前目标宫格，1~9
 
 int main(int argc, char** argv)
 {
-	// 初始化串口类
+	// 初始化串口
 	Serialport Serialport1("/dev/ttyTHS0");
 	int fd = Serialport1.open_port("/dev/ttyTHS0");
 	if (fd >= 0)
@@ -37,12 +38,23 @@ int main(int argc, char** argv)
  	else
 		cout << "open serialport : failed" << endl;
 	
-// 	cap.open(0);
-// 	cap.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));
-//	cap.set(CAP_PROP_FRAME_WIDTH, Width);
-// 	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
-	cap.open("output3.avi");
-	cap.set(CAP_PROP_POS_FRAMES, 10 * 30);
+	// 读取配置文件
+	FileStorage fs("config.xml", FileStorage::READ);
+
+	string filename;
+	fs["filename"] >> filename;
+	fs["minGrayValue"] >> minGrayValue;
+	fs["t1"] >> t1;
+	fs["t2"] >> t2;
+
+	fs.release();
+	
+	// 打开摄像头
+ 	cap.open(0);
+ 	cap.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));
+	cap.set(CAP_PROP_FRAME_WIDTH, Width);
+ 	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
+//	cap.open(filename);
 
 	element0 = getStructuringElement(MORPH_ELLIPSE, Size(3, 3));
 	element1 = getStructuringElement(MORPH_ELLIPSE, Size(5, 5));
@@ -54,7 +66,7 @@ int main(int argc, char** argv)
 	FileStorage fsClassifications("classifications.xml", FileStorage::READ);  // 读取 classifications.xml 分类文件
 
 	if (!fsClassifications.isOpened()) {
-		cout << "ERROR, 无法打开classifications.xml\n\n";
+		cout << "ERROR, cannot open classifications.xml\n\n";
 		//system("pause");
 		return 0;
 	}
@@ -66,7 +78,7 @@ int main(int argc, char** argv)
 	FileStorage fsTrainingImages("images.xml", FileStorage::READ);  // 打开训练图片文件
 
 	if (!fsTrainingImages.isOpened()) {
-		cout << "ERROR, 无法打开images.xml\n\n";
+		cout << "ERROR, cannot open images.xml\n\n";
 		//system("pause");
 		return 0;
 	}
@@ -91,7 +103,7 @@ int main(int argc, char** argv)
 	/************************************************************************/
 	FileStorage fsClassifications1("classifications1.xml", FileStorage::READ);
 	if (!fsClassifications1.isOpened()) {
-		cout << "ERROR, 无法打开classifications1.xml\n\n";
+		cout << "ERROR, cannot open classifications1.xml\n\n";
 		return 0;
 	}
 	Mat matClassificationInts1;
@@ -99,7 +111,7 @@ int main(int argc, char** argv)
 	fsClassifications1.release();
 	FileStorage fsTrainingImages1("images1.xml", FileStorage::READ);
 	if (!fsTrainingImages1.isOpened()) {
-		cout << "ERROR, 无法打开images.xml\n\n";
+		cout << "ERROR, cannot open images.xml\n\n";
 		return 0;
 	}
 	Mat matTrainingImagesAsFlattenedFloats1;  // we will read multiple images into this single image variable as though it is a vector
@@ -113,18 +125,20 @@ int main(int argc, char** argv)
 	/************************************************************************/
 	/*                         开始检测每一帧图像                             */
 	/************************************************************************/
-	while (cap.isOpened()) {
+	while (true) {
 		cap >> frame;
 
 		if (frame.empty())
-			break;
-		
-		imshow("frame", frame);
+			break;	// continue
 
 		cvtColor(frame, gray_img, COLOR_BGR2GRAY);
 		Canny(gray_img, canny_img, t1, t2);
 		dilate(canny_img, canny_img, element0);	// 膨胀
+		
+#ifdef DEBUG
+		imshow("frame", frame);
 		imshow("canny", canny_img);
+#endif
 
 		// 寻找所有轮廓
 		vector<vector<Point> > contours0;		// 所有轮廓
@@ -132,45 +146,50 @@ int main(int argc, char** argv)
 
 		// 先用面积约束，面积在指定范围内的轮廓的数量不满足要求时，进入下一帧
 		vector<vector<Point> > contours1;		// 面积在指定范围内的轮廓（九宫格区）
-		vector<double> areas;
 		for (size_t i = 0; i < contours0.size(); i++) {
 			double area = contourArea(contours0[i]);
-			areas.push_back(area);
 			if (area > MinArea && area < MaxArea) {
 				contours1.push_back(contours0[i]);
 			}
 		}
 
 	 	if (contours1.size() < 9) {
-			cout << "面积在指定范围内的轮廓数量不足" << endl;
+			cout << "contours in specified range are not enough" << endl;
 			continue;
 		}
 
-		// 上面得到的轮廓可能是有凸缺陷的（如果数字的笔画延伸到了轮廓的边缘）
+		// 上面得到的轮廓可能有凸缺陷（如果数字的笔画延伸到了轮廓的边缘）
 		// 下面需要寻找凸包，绘制包含凸缺陷的较规范的矩形
-		Mat contours_Mat(Height, Width, CV_8UC1, Scalar(0));
+		vector<vector<Point> > contours2;			// 面积在指定范围内的轮廓（九宫格区_）
 		for (size_t i = 0; i < contours1.size(); i++) {
 			vector<int> hull;						// 找到的凸包（其实是轮廓最外层点的索引）
 			convexHull(contours1[i], hull, true);	// 寻找点集（轮廓）的凸包
-			int hullcount = (int)hull.size();
-			Point point0 = contours1[i][hull[hullcount - 1]];
-			for (int j = 0; j < hullcount; j++) {
-				Point point = contours1[i][hull[j]];
-				line(contours_Mat, point0, point, Scalar(255), 1, LINE_AA);
-				point0 = point;
-			}
+
+			vector<Point> tempContour;				// 用凸包制作点集（轮廓），用于计算面积
+			for (size_t j = 0; j < hull.size(); j++)
+				tempContour.push_back(contours1[i][hull[j]]);
+			double tempArea = contourArea(tempContour);
+			if (tempArea < 4500 || tempArea > 7500)	// 面积约束
+				continue;
+
+			vector<Point> tempContour2;
+			approxPolyDP(tempContour, tempContour2, 30, true);
+			if (tempContour2.size() != 4)			// 逼近多边形，剔除非四边形
+				continue;
+
+			contours2.push_back(tempContour2);
 		}
+
+#ifdef DEBUG		
+		Mat contours_Mat(Height, Width, CV_8UC1, Scalar(0));
+		drawContours(contours_Mat, contours2, -1, Scalar(255), -1, LINE_AA);
 		imshow("contours_Mat", contours_Mat);
-		vector<vector<Point> > contours2;				// 面积在指定范围内的轮廓（九宫格区_）
-		findContours(contours_Mat, contours2, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
+#endif
 		
 		// 对面积在指定范围内的轮廓取最小包围矩形（九宫格区）
 		vector<RotatedRect> contours_rotatedRect;
-		for (int i = 0; i < contours2.size(); i++) {
-			// 这里判断了 contours2[i].size() 的范围，如果 contours2[i] 是较规范的矩形，则 contours2[i].size() < 100
-			if (contours2[i].size() < 100)
-				contours_rotatedRect.push_back(minAreaRect(contours2[i]));
-		}
+		for (int i = 0; i < contours2.size(); i++)
+			contours_rotatedRect.push_back(minAreaRect(contours2[i]));
 
 		// 如果旋转矩形的数量大于9，则做一些约束，角度，长宽比
 		if (contours_rotatedRect.size() > 9) {
@@ -219,8 +238,8 @@ int main(int argc, char** argv)
 				Point2f srcPoints[4];
 				Point2f dstPoints[4];
 
-				srcPoints[0] = p[0] + Point2f(10, 8);
-				srcPoints[1] = p[1] + Point2f(-10, 8);
+				srcPoints[0] = p[0] + Point2f(10, 6);
+				srcPoints[1] = p[1] + Point2f(-10, 6);
 				srcPoints[2] = p[2] + Point2f(-10, -4);
 				srcPoints[3] = p[3] + Point2f(10, -4);
 
@@ -235,7 +254,8 @@ int main(int argc, char** argv)
 				}
 
 				if (passwordRect.x < 0 || (passwordRect.x + passwordRect.width) > Width ||
-					passwordRect.y < 0 || (passwordRect.y + passwordRect.height) > Height)
+					passwordRect.y < 0 || (passwordRect.y + passwordRect.height) > Height ||
+					passwordRect.width < 10 || passwordRect.height < 10)
 					foundNixieTubeArea = false;
 				else
 					foundNixieTubeArea = true;
@@ -258,8 +278,8 @@ int main(int argc, char** argv)
 
 				// 九宫格内的数字在两次变换之间有短暂时间没有内容（空白）
 				// 这里通过最低灰度值来判断是否存在数字
-				if (i == 0 && min_mat(dstImage) > 80) {
-					cout << "宫格内没有数字" << endl;
+				if (i == 0 && min_mat(dstImage) > minGrayValue) {
+					cout << "no number in cells" << endl;
 					isEmpty = true;
 				}
 
@@ -279,6 +299,7 @@ int main(int argc, char** argv)
 			}
 		}
 		else {
+			waitKey(1);
 			continue;
 		}
 
@@ -311,8 +332,10 @@ int main(int argc, char** argv)
 					errorCount++;
 					errorPair.push_back(i);
 					errorPair.push_back(j);
+#ifdef DEBUG					
 					cout << i + 1 << " " << nineNumber[i] << " " << neighborDistance[i] << endl;
 					cout << j + 1 << " " << nineNumber[j] << " " << neighborDistance[j] << endl;
+#endif
 				}
 			}
 		}
@@ -414,11 +437,13 @@ int main(int argc, char** argv)
 
 	HERE:
 
+#ifdef DEBUG
 		Mat nineNumberMat(120, 120, CV_8UC1);
 		for (int i = 0; i < 3; i++)
 			for (int j = 0; j < 3; j++)
 				nineRect_mat[j + i * 3].copyTo(nineNumberMat(Rect(j * 40, i * 40, 40, 40)));
 		imshow("nineNumberMat", nineNumberMat);
+#endif
 
 		if (!foundNixieTubeArea)
 			continue;
@@ -441,15 +466,17 @@ int main(int argc, char** argv)
 			if (tmpHeight > 20)
 				ninxiTubeNumbRect.push_back(tmpRect);
 		}
-
+		
+#ifdef DEBUG
 		imshow("frame", frame);
 		imshow("password", pw_bin);
+#endif
 
 		if (ninxiTubeNumbRect.size() == 5) {
 			sortRect(ninxiTubeNumbRect);
 		}
 		else {
-			cout << "数码管识别错误，ninxiTubeNumbRect.size() = " << ninxiTubeNumbRect.size() << endl;
+			cout << "ninxiTube ERROR, ninxiTubeNumbRect.size() = " << ninxiTubeNumbRect.size() << endl;
 			waitKey(1);
 			continue;
 		}
@@ -484,6 +511,7 @@ int main(int argc, char** argv)
 		}
 		
 		// 打印输出密码区和九宫格区的数字
+//#ifdef DEBUG
 		for (int i = 0; i < 5; i++)
 			cout << password[i];
 		cout << "-->";
@@ -497,6 +525,7 @@ int main(int argc, char** argv)
 			waitKey(0);
 		else if (key == 27)
 			break;
+
 	}
 
 	return 0;
