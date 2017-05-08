@@ -80,16 +80,15 @@ void* capFrameThread(void *arg);
 
 int main()
 {
-	//showText();
-
 	// 初始化串口类
 	Serialport Serialport1("/dev/ttyUSB0");
 	int fd = Serialport1.open_port("/dev/ttyUSB0");
-	if (fd >= 0)
-		Serialport1.set_opt(115200, 8, 'N', 1);
- 	else
-		cout << "open serialport : failed" << endl;
-
+	while (fd < 0) {
+		sleep(1);
+		fd = Serialport1.open_port("/dev/ttyUSB0");
+	}
+	Serialport1.set_opt(115200, 8, 'N', 1);
+ 
 	/***************************************
 			读取 video.cfg 里面的键值对
 	****************************************/
@@ -126,16 +125,15 @@ int main()
 #endif
 
 	//VideoCapture cap(fileName);
-	cap.open(0);
+	cap.open(0);	
+	while (!cap.isOpened()) {
+		sleep(1);
+		cap.open(0);
+	}
 	//cap.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));	// 需要在设置宽高之前设置，否则无效
 	//cap.set(CV_CAP_PROP_SATURATION, 80);
 	cap.set(CAP_PROP_FRAME_WIDTH, Width);
 	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
-
-	if (!cap.isOpened()) {
-		cout << "VideoCapture initialize : failed" << endl;
-		return -1;
-	}
 
 	// 开启读取视频帧的线程
 	pthread_t id;

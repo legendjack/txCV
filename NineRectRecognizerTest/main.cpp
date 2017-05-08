@@ -1,3 +1,4 @@
+#include <pthread.h>
 #include "functions.h"
 #include "serialsom.h"
 
@@ -33,10 +34,11 @@ int main(int argc, char** argv)
 	// 初始化串口
 	Serialport Serialport1("/dev/ttyTHS0");
 	int fd = Serialport1.open_port("/dev/ttyTHS0");
-	if (fd >= 0)
-		Serialport1.set_opt(115200, 8, 'N', 1);
- 	else
-		cout << "open serialport : failed" << endl;
+	while (fd < 0) {
+		sleep(1);
+		fd = Serialport1.open_port("/dev/ttyTHS0");
+	}
+	Serialport1.set_opt(115200, 8, 'N', 1);
 	
 	// 读取配置文件
 	FileStorage fs("config.xml", FileStorage::READ);
@@ -51,11 +53,22 @@ int main(int argc, char** argv)
 	
 	// 打开摄像头
  	cap.open(0);
- 	cap.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));
+	while (!cap.isOpened()) {
+		sleep(1);
+		cap.open(0);
+	}
 	cap.set(CAP_PROP_FRAME_WIDTH, Width);
  	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
-//	cap.open(filename);
 
+	// 开启读取视频帧的线程
+	pthread_t id;
+	int ret = pthread_create(&id, NULL, capFrameThread, NULL);
+	if (!ret) {
+		cout << "open thread to capture frame: success" << endl;
+	} else {
+		cout << "open thread to capture frame: failed" << endl;
+	}
+	
 	element0 = getStructuringElement(MORPH_ELLIPSE, Size(3, 3));
 	element1 = getStructuringElement(MORPH_ELLIPSE, Size(5, 5));
 	element2 = getStructuringElement(MORPH_ELLIPSE, Size(2, 2));
@@ -126,11 +139,10 @@ int main(int argc, char** argv)
 	/*                         开始检测每一帧图像                             */
 	/************************************************************************/
 	while (true) {
-		cap >> frame;
 
 		if (frame.empty())
-			break;	// continue
-
+			continue;
+		
 		cvtColor(frame, gray_img, COLOR_BGR2GRAY);
 		Canny(gray_img, canny_img, t1, t2);
 		dilate(canny_img, canny_img, element0);	// 膨胀
@@ -154,6 +166,7 @@ int main(int argc, char** argv)
 		}
 
 	 	if (contours1.size() < 9) {
+			Serialport1.usart3_send(static_cast<uint8_t>(255));
 			cout << "contours in specified range are not enough" << endl;
 			continue;
 		}
@@ -299,6 +312,7 @@ int main(int argc, char** argv)
 			}
 		}
 		else {
+			Serialport1.usart3_send(static_cast<uint8_t>(255));
 			waitKey(1);
 			continue;
 		}
@@ -530,6 +544,15 @@ int main(int argc, char** argv)
 
 	return 0;
 }
+
+void* capFrameThread(void *arg) {
+	while(true) {
+		if (cap.isOpened())
+			cap >> frame;
+	}
+    return NULL;
+}
+
 /*
 double time0 = static_cast<double>(getTickCount());
 time0 = ((double)getTickCount() - time0) / getTickFrequency();
