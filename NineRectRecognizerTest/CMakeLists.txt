@@ -12,4 +12,4 @@ FIND_PACKAGE(OpenCV REQUIRED)
 #add executable file
 ADD_EXECUTABLE(main main.cpp)
 #add link librbry
-TARGET_LINK_LIBRARIES(main ${OpenCV_LIBS})
+TARGET_LINK_LIBRARIES(main pthread ${OpenCV_LIBS})

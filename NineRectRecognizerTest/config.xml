@@ -1,12 +1,15 @@
 <?xml version="1.0"?>
 <opencv_storage>
-  
+
   <!-- 视频文件名 -->
   <filename>"16.avi"</filename>
 
   <!-- 宫格内的最低灰度值，低于该灰度值则认为没有数字 -->
   <minGrayValue>30</minGrayValue>
 
+  <!-- 数码管分割灰度阈值 -->
+  <ninxiTubeGrayValue>180</ninxiTubeGrayValue>
+  
   <!-- Canny 阈值 -->
   <t1>80</t1>
   <t2>180</t2>

@@ -19,7 +19,6 @@
  *
  * version 2.0
  * 估计步兵车的运动状态，如果是匀速移动，保持移速后加上一定角度使云台跟上步兵车转动
- * 实现困难，暂时不用
  */
 
 #include <pthread.h>
@@ -29,7 +28,7 @@
 #include "functions.h"
 #include "getConfig.h"
 #include "serialsom.h"
-//#include "MyQueue.h"
+#include "MyQueue.h"
 
 // 宏定义
 #define WINNAME	"Armor Recognition"
@@ -61,9 +60,8 @@ bool findArmor;
 bool sended;					// 串口信息是否已经发送
 Point targetPoint(390, 342);
 Point centerOfArmor;
-float areaOfLightContour = 0;	// 某个灯条的面积，用于大致表示目标装甲的远近。
-//MyQueue mq(20);
-//bool isUniformSpeed = false;
+MyQueue mq(20);
+bool isUniformSpeed = false;
 //Point predictPoint;				// 预测装甲板的位置
 
 // 计算直方图需要的参数
@@ -292,17 +290,11 @@ int main()
 					else if (angleDifference > 170)
 						tmpAngle1 = angleDifference;
 					findArmor = true;
-					
-					areaOfLightContour = rotatedRectHeight * rotatedRectHeight;
 				}
 			}
 		}
 
 		if (findArmor) {
-			if (areaOfLightContour < 200)
-				targetPoint = Point(100, 100);
-			else if (areaOfLightContour > 200)
-				targetPoint = Point(390, 342);
 
 			// 如果检测到了装甲的位置，frameCount置零，并向串口发送装甲的位置信息
 			frameCount = 0;
@@ -327,15 +319,52 @@ int main()
 			else if (disY < 0)
 				disY = 0;
 
+			if(!isUniformSpeed)
+				mq.push(disX);
+
+			// 如果目标不在匀速运动的状态，则状态值设置10
+			int status = 10;
+
+			/* 如果目标在匀速移动，且disX大于110，则发送状态值20，云台加速追赶
+			 * 如果目标在匀速移动，且disX小于110（已经追赶上），则发送状态值15，云台匀速移动
+			 */
+			if (mq.dataSize == 20 && mq.min > 145 && mq.max < 170 && disX >= 110) {
+				status = 20;
+				isUniformSpeed = true;
+			}
+			else if (mq.dataSize == 20 && mq.min > 145 && mq.max < 170
+				&& disX < 110 && disX > 90 ) {
+				status = 15;
+				isUniformSpeed = true;
+			}
+			else if (mq.dataSize == 20 && mq.min > 145 && mq.max < 170 && disX < 90 ) {
+				status = 10;
+				isUniformSpeed = false;
+			}
+
+			if (mq.dataSize == 20 && mq.min > 25 && mq.max < 65 && disX <= 90) {
+				status = 0;
+				isUniformSpeed = true;
+			}
+			else if (mq.dataSize == 20 && mq.min > 25 && mq.max < 65
+				&& disX > 90 && disX < 110) {
+				status = 5;
+				isUniformSpeed = true;
+			}
+			else if (mq.dataSize == 20 && mq.min > 25 && mq.max < 65 && disX > 110) {
+				status = 10;
+				isUniformSpeed = false;
+			}
+
 			yawOut = static_cast<uint8_t>(disX);
 			pitchOut = static_cast<uint8_t>(disY);
 
  			if (fd >= 0)
-				sended = Serialport1.usart3_send(pitchOut, yawOut, static_cast<uint8_t>(10));	// 发送竖直方向和水平方向移动速度
+				sended = Serialport1.usart3_send(pitchOut, yawOut, static_cast<uint8_t>(status));	// 发送竖直方向和水平方向移动速度
 		} else {
 			// 检测到灯条但是没有匹配到装甲
 			frameCount++;
-//			mq.clear();
+			mq.clear();
 			if (frameCount < 10) {
 				if (fd >= 0)
 					sended = Serialport1.usart3_send(pitchOut, yawOut, static_cast<uint8_t>(10));

@@ -10,6 +10,7 @@ const int Height = 600;		// 视频高
 int MaxArea = 8000;			// 每个宫格轮廓的最大面积
 int MinArea = 4000;			// 每个宫格轮廓的最小面积
 int minGrayValue;			// 宫格内的最低灰度值，如果小于该值则认为宫格内没有内容（数字）
+int ninxiTubeGrayValue;		// 数码管分割灰度阈值
 
 VideoCapture cap;
 Mat frame, gray_img, canny_img;
@@ -17,7 +18,9 @@ Mat element0, element1, element2;
 
 int t1 = 200, t2 = 250;		// canny阈值
 int password[5];			// 密码区（数码管）的 5 个数字
+int passwordLast[5];		// 上一帧检识别出的密码，和当前帧做对比，如果有超过 3 个数字改变则认为密码改变
 int nineNumber[9];			// 九宫格区的 9 个数字
+int nineNumberLast[9];		// 上一帧检识别出的九个数字，和当前帧做对比，如果有超过 5 个数字改变则认为九宫格数字改变
 float neighborDistance[9];	// kNN 识别每个数字与最近邻居的距离，值越小说明是该值的可能性越大
 int errorCount;				// 识别错误数字的个数
 
@@ -26,8 +29,10 @@ Mat pw_gray, pw_bin;				// 密码区（数码管）的灰度图和二值图
 bool foundNixieTubeArea = false;	// 是否发现数码管区
 bool isEmpty = false;				// 宫格中是否有数字
 
-int nineRectNumber = 0;				// 由九宫格前两位数字组成的两位数，如果变化则表示九宫格区改变
+//int nineRectNumber = 0;				// 由九宫格前两位数字组成的两位数，如果变化则表示九宫格区改变
 int targetRect = 1;					// 当前目标宫格，1~9
+
+void* capFrameThread(void *arg);
 
 int main(int argc, char** argv)
 {
@@ -46,6 +51,7 @@ int main(int argc, char** argv)
 	string filename;
 	fs["filename"] >> filename;
 	fs["minGrayValue"] >> minGrayValue;
+	fs["ninxiTubeGrayValue"] >> ninxiTubeGrayValue;
 	fs["t1"] >> t1;
 	fs["t2"] >> t2;
 
@@ -139,6 +145,7 @@ int main(int argc, char** argv)
 	/*                         开始检测每一帧图像                             */
 	/************************************************************************/
 	while (true) {
+		// cap >> frame;
 
 		if (frame.empty())
 			continue;
@@ -355,6 +362,23 @@ int main(int argc, char** argv)
 		}
 
 		if (errorCount == 1) {
+			if (neighborDistance[0] < 3) {
+				nineNumber[errorPair[1]] = 0;
+				int sum = 0;
+				for (int k = 0; k < 9; k++)
+					sum += nineNumber[k];
+				nineNumber[errorPair[1]] = 45 - sum;
+				goto HERE;
+			}
+			else if (neighborDistance[1] < 3) {
+				nineNumber[errorPair[0]] = 0;
+				int sum = 0;
+				for (int k = 0; k < 9; k++)
+					sum += nineNumber[k];
+				nineNumber[errorPair[0]] = 45 - sum;
+				goto HERE;
+			}
+			
 			/* 如果只有一个数字识别错误，再次使用 kNearest->findNearest 寻找 3 个近邻
 			 * 如果其中一个数字的 3 个近邻为同一个值，则认为该值正确，另一个值错误
 			 */
@@ -464,7 +488,7 @@ int main(int argc, char** argv)
 
 		// 由数码管区的 passwordRect 得到相应的ROI，并做一些预处理
 		pw_gray = gray_img(passwordRect);
-		threshold(pw_gray, pw_bin, 200, 255, THRESH_BINARY);
+		threshold(pw_gray, pw_bin, ninxiTubeGrayValue, 255, THRESH_BINARY);
 		erode(pw_bin, pw_bin, element2);		// 腐蚀
 		dilate(pw_bin, pw_bin, element1);		// 膨胀
 		connectClosedPoint(pw_bin);
