@@ -1,4 +1,5 @@
 #include <pthread.h>
+#include <sstream.h>
 #include "functions.h"
 #include "serialsom.h"
 
@@ -13,6 +14,7 @@ int minGrayValue;			// ¹¬¸ñÄÚµÄ×îµÍ»Ò¶ÈÖµ£¬Èç¹ûÐ¡ÓÚ¸ÃÖµÔòÈÏÎª¹¬¸ñÄÚÃ»ÓÐÄÚÈÝ£¨Êý×
 int ninxiTubeGrayValue;		// ÊýÂë¹Ü·Ö¸î»Ò¶ÈãÐÖµ
 
 VideoCapture cap;
+VideoWriter writer;
 Mat frame, gray_img, canny_img;
 Mat element0, element1, element2;
 
@@ -21,16 +23,22 @@ int password[5];			// ÃÜÂëÇø£¨ÊýÂë¹Ü£©µÄ 5 ¸öÊý×Ö
 int passwordLast[5];		// ÉÏÒ»Ö¡¼ìÊ¶±ð³öµÄÃÜÂë£¬ºÍµ±Ç°Ö¡×ö¶Ô±È£¬Èç¹ûÓÐ³¬¹ý 3 ¸öÊý×Ö¸Ä±äÔòÈÏÎªÃÜÂë¸Ä±ä
 int nineNumber[9];			// ¾Å¹¬¸ñÇøµÄ 9 ¸öÊý×Ö
 int nineNumberLast[9];		// ÉÏÒ»Ö¡¼ìÊ¶±ð³öµÄ¾Å¸öÊý×Ö£¬ºÍµ±Ç°Ö¡×ö¶Ô±È£¬Èç¹ûÓÐ³¬¹ý 5 ¸öÊý×Ö¸Ä±äÔòÈÏÎª¾Å¹¬¸ñÊý×Ö¸Ä±ä
-float neighborDistance[9];	// kNN Ê¶±ðÃ¿¸öÊý×ÖÓë×î½üÁÚ¾ÓµÄ¾àÀë£¬ÖµÔ½Ð¡ËµÃ÷ÊÇ¸ÃÖµµÄ¿ÉÄÜÐÔÔ½´ó
+int currentNumberCount = 0;	// µ±Ç°Ä¿±êÊÇÊýÂë¹ÜÎåÎ»ÊýÖÐµÚ¼¸¸ö
 int errorCount;				// Ê¶±ð´íÎóÊý×ÖµÄ¸öÊý
+float neighborDistance[9];	// kNN Ê¶±ðÃ¿¸öÊý×ÖÓë×î½üÁÚ¾ÓµÄ¾àÀë£¬ÖµÔ½Ð¡ËµÃ÷ÊÇ¸ÃÖµµÄ¿ÉÄÜÐÔÔ½´ó
 
 Rect passwordRect(0, 0, 200, 60);	// ¾Å¹¬¸ñÇøµÄ Rect
 Mat pw_gray, pw_bin;				// ÃÜÂëÇø£¨ÊýÂë¹Ü£©µÄ»Ò¶ÈÍ¼ºÍ¶þÖµÍ¼
 bool foundNixieTubeArea = false;	// ÊÇ·ñ·¢ÏÖÊýÂë¹ÜÇø
 bool isEmpty = false;				// ¹¬¸ñÖÐÊÇ·ñÓÐÊý×Ö
+bool passwordChanged = true;		// ÃÜÂëÇøÊÇ·ñ¸Ä±ä	
+bool nineNumberChanged = true;		// ¾Å¹¬¸ñÇøÊÇ·ñ¸Ä±ä
 
 //int nineRectNumber = 0;				// ÓÉ¾Å¹¬¸ñÇ°Á½Î»Êý×Ö×é³ÉµÄÁ½Î»Êý£¬Èç¹û±ä»¯Ôò±íÊ¾¾Å¹¬¸ñÇø¸Ä±ä
 int targetRect = 1;					// µ±Ç°Ä¿±ê¹¬¸ñ£¬1~9
+int recordVideo = 0;				// ÊÇ·ñÂ¼Ïñ
+int videoName;						// Â¼ÏñÎÄ¼þÃû
+int findNineRect = 0;				// 0 - Î´·¢ÏÖ¾Å¹¬¸ñ£¬20 - ·¢ÏÖ¾Å¹¬¸ñ
 
 void* capFrameThread(void *arg);
 
@@ -54,8 +62,22 @@ int main(int argc, char** argv)
 	fs["ninxiTubeGrayValue"] >> ninxiTubeGrayValue;
 	fs["t1"] >> t1;
 	fs["t2"] >> t2;
+	fs["recordVideo"] >> recordVideo;
+	fs["videoName"] >> videoName;
 
 	fs.release();
+	
+	if (recordVideo) {
+		stringstream ss;
+		ss << videoName;
+		string s = ss.str();
+		int fourcc = CV_FOURCC('M', 'J', 'P', 'G');
+		writer.open(s + ".avi", fourcc, 25.0, Size(Width, Height));
+		videoName++;
+		FileStorage fs("config.xml", FileStorage::WRITE);
+		fs << "videoName" << videoName;
+		fs.release();
+	}
 	
 	// ´ò¿ªÉãÏñÍ·
  	cap.open(0);
@@ -173,7 +195,11 @@ int main(int argc, char** argv)
 		}
 
 	 	if (contours1.size() < 9) {
-			Serialport1.usart3_send(static_cast<uint8_t>(255));
+			if (findNineRect > 0)
+				findNineRect--;
+			
+			if (findNineRect == 0)
+				Serialport1.usart3_send(static_cast<uint8_t>(255));
 			cout << "contours in specified range are not enough" << endl;
 			continue;
 		}
@@ -248,6 +274,9 @@ int main(int argc, char** argv)
 		vector<Mat> nineRect_mat(9);	// ¾­¹ýãÐÖµ·Ö¸îºÍÅòÕÍ´¦ÀíµÄ¾Å¹¬¸ñ£¨Êý×Ö£©µÄMat
 		isEmpty = false;
 		if (contours_rotatedRect.size() == 9) {
+			if (findNineRect < 20)
+				findNineRect++;
+			
 			sortRotatedRect(contours_rotatedRect);	// °Ñ9¸öÐý×ª¾ØÐÎ°´ÕÕË³ÐòÅÅÐò
 			// ¶ÔÓÚÃ¿¸öÐý×ª¾ØÐÎ£¬ÕÒµ½ÆäËÄ¸ö¶¥µã£¬Ê¹ÓÃ·ÂÉä±ä»»½«Æä±ä»»ÎªÕý¾ØÐÎ
 			for (int i = 0; i < 9; i++) {
@@ -319,8 +348,14 @@ int main(int argc, char** argv)
 			}
 		}
 		else {
-			Serialport1.usart3_send(static_cast<uint8_t>(255));
+			if (findNineRect > 0)
+				findNineRect--;
+			
+			if (findNineRect == 0)
+				Serialport1.usart3_send(static_cast<uint8_t>(255));
+#ifdef DEBUG			
 			waitKey(1);
+#endif
 			continue;
 		}
 
@@ -566,13 +601,18 @@ int main(int argc, char** argv)
 
 	}
 
+	cap.release();
+	writer.release();
 	return 0;
 }
 
 void* capFrameThread(void *arg) {
 	while(true) {
-		if (cap.isOpened())
+		if (cap.isOpened()) {
 			cap >> frame;
+			if (recordVideo)
+				writer.write(frame);
+		}
 	}
     return NULL;
 }
