@@ -1,5 +1,5 @@
 #include <pthread.h>
-#include <sstream.h>
+#include <sstream>
 #include "functions.h"
 #include "serialsom.h"
 
@@ -23,7 +23,7 @@ int password[5];			// 密码区（数码管）的 5 个数字
 int passwordLast[5];		// 上一帧检识别出的密码，和当前帧做对比，如果有超过 3 个数字改变则认为密码改变
 int nineNumber[9];			// 九宫格区的 9 个数字
 int nineNumberLast[9];		// 上一帧检识别出的九个数字，和当前帧做对比，如果有超过 5 个数字改变则认为九宫格数字改变
-int currentNumberCount = 0;	// 当前目标是数码管五位数中第几个
+int currentNumberCount = 0;	// 当前目标是数码管五位数中第几个，0~4
 int errorCount;				// 识别错误数字的个数
 float neighborDistance[9];	// kNN 识别每个数字与最近邻居的距离，值越小说明是该值的可能性越大
 
@@ -34,8 +34,6 @@ bool isEmpty = false;				// 宫格中是否有数字
 bool passwordChanged = true;		// 密码区是否改变	
 bool nineNumberChanged = true;		// 九宫格区是否改变
 
-//int nineRectNumber = 0;				// 由九宫格前两位数字组成的两位数，如果变化则表示九宫格区改变
-int targetRect = 1;					// 当前目标宫格，1~9
 int recordVideo = 0;				// 是否录像
 int videoName;						// 录像文件名
 int findNineRect = 0;				// 0 - 未发现九宫格，20 - 发现九宫格
@@ -287,10 +285,10 @@ int main(int argc, char** argv)
 				Point2f srcPoints[4];
 				Point2f dstPoints[4];
 
-				srcPoints[0] = p[0] + Point2f(10, 6);
-				srcPoints[1] = p[1] + Point2f(-10, 6);
-				srcPoints[2] = p[2] + Point2f(-10, -4);
-				srcPoints[3] = p[3] + Point2f(10, -4);
+				srcPoints[0] = p[0] + Point2f(10, 6);		// 左上
+				srcPoints[1] = p[1] + Point2f(-10, 6);		// 右上
+				srcPoints[2] = p[2] + Point2f(-10, -4);		// 右下
+				srcPoints[3] = p[3] + Point2f(10, -4);		// 左下
 
 				// 利用第一个宫格的右上角和第三个宫格的左上角来定位密码区（数码管）的位置，得到相应的Rect
 				if (i == 0) {
@@ -308,11 +306,10 @@ int main(int argc, char** argv)
 					foundNixieTubeArea = false;
 				else
 					foundNixieTubeArea = true;
-
+#ifdef DEBUG
 				for (int j = 0; j < 4; j++)
 					line(frame, srcPoints[j], srcPoints[(j + 1) % 4], Scalar(204, 122, 0), 2, LINE_AA);
-				//putText(frame, to_string(i + 1), Point(contours_rotatedRect[i].center.x, contours_rotatedRect[i].center.y) - Point(20, 5), FONT_HERSHEY_SCRIPT_SIMPLEX, 0.6, Scalar(66, 206, 255), 2, 8);
-
+#endif
 				dstPoints[0] = Point2f(0, 0);
 				dstPoints[1] = Point2f(40, 0);
 				dstPoints[2] = Point2f(40, 40);
@@ -335,7 +332,7 @@ int main(int argc, char** argv)
 				threshold(dstImage, nineRect_mat[i], 0, 255, THRESH_OTSU);
 				threshold(nineRect_mat[i], nineRect_mat[i], 50, 255, THRESH_BINARY_INV);
 				dilate(nineRect_mat[i], nineRect_mat[i], element2);		// 膨胀
-				deskew(nineRect_mat[i]);	// 抗扭斜处理
+				deskew(nineRect_mat[i]);								// 抗扭斜处理
 				Mat matROI_ = nineRect_mat[i].clone();
 				vector<vector<Point> > contours;
 				findContours(matROI_, contours, RETR_CCOMP, CHAIN_APPROX_SIMPLE);
@@ -539,18 +536,15 @@ int main(int argc, char** argv)
 			if (tmpHeight > 20)
 				ninxiTubeNumbRect.push_back(tmpRect);
 		}
-		
-#ifdef DEBUG
-		imshow("frame", frame);
-		imshow("password", pw_bin);
-#endif
 
 		if (ninxiTubeNumbRect.size() == 5) {
 			sortRect(ninxiTubeNumbRect);
 		}
 		else {
+#ifdef DEBUG			
 			cout << "ninxiTube ERROR, ninxiTubeNumbRect.size() = " << ninxiTubeNumbRect.size() << endl;
 			waitKey(1);
+#endif
 			continue;
 		}
 		
@@ -566,25 +560,54 @@ int main(int argc, char** argv)
 			kNearest1->findNearest(matROIFlattenedFloat, 1, matCurrentChar);
 			password[i] = (int)matCurrentChar.at<float>(0, 0);		// 保存密码区的五个数字
 		}
+		
+		// 判断数码管区域是否改变
+		int changedNum = 0;
+		for (int i = 0; i < 5; i++)
+			if (password[i] != passwordLast[i])
+				changedNum++;
+		
+		// 如果有超过两个数码管显示的数字变化，则认为密码改变，当前目标为第一个数码管显示的数字
+		if (changedNum > 2) {
+			currentNumberCount = 0;
+			
+			for (int i = 0; i < 5; i++)
+				passwordLast[i] = password[i];
+		}
 
-		if ((nineNumber[0] * 10 + nineNumber[1]) != nineRectNumber) {
+		// 判断九宫格区域是否改变
+		changedNum = 0;
+		for (int i = 0; i < 9; i++)
+			if (nineNumber[i] != nineNumberLast[i])
+				changedNum++;		
+		
+		// 九宫格区已经改变，则查找当前目标数码管的数字在九宫格中的位置，然后目标数码管向右移动一个
+		if (changedNum > 4) {
 			for (int i = 0; i < 9; i++) {
-				if (targetRect == nineNumber[i]) {
-					Serialport1.usart3_send(static_cast<uint8_t>(i + 1));
-					cout << "targetNum : " << targetRect << "-->" << i + 1 << endl;
+				if (password[currentNumberCount] == nineNumber[i]) {
+#ifdef DEBUG
+					circle(frame, contours_rotatedRect[i].center, 3, Scalar(0,0,255), -1);
+					cout << "targetNum : " << currentNumberCount + 1 << "-->" << i + 1 << endl;
+#endif
+					Serialport1.usart3_send(static_cast<uint8_t>(i + 1));					
+					if (currentNumberCount < 4)
+						currentNumberCount++;
 					break;
 				}
 			}
-			if (targetRect < 9)
-				targetRect++;
-			else
-				targetRect = 1;
 			
-			nineRectNumber = nineNumber[0] * 10 + nineNumber[1];
+			for (int i = 0; i < 9; i++)
+				nineNumberLast[i] = nineNumber[i];
 		}
+		
+#ifdef DEBUG
+		imshow("frame", frame);
+		imshow("password", pw_bin);
+#endif
 		
 		// 打印输出密码区和九宫格区的数字
 //#ifdef DEBUG
+
 		for (int i = 0; i < 5; i++)
 			cout << password[i];
 		cout << "-->";
@@ -598,7 +621,7 @@ int main(int argc, char** argv)
 			waitKey(0);
 		else if (key == 27)
 			break;
-
+//#endif
 	}
 
 	cap.release();

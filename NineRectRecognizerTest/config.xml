@@ -11,8 +11,8 @@
   <ninxiTubeGrayValue>180</ninxiTubeGrayValue>
   
   <!-- Canny 阈值 -->
-  <t1>80</t1>
-  <t2>180</t2>
+  <t1>200</t1>
+  <t2>250</t2>
   
   <!-- 是否录像，0-不录，1-录像 -->
   <recordVideo>0</recordVideo>
