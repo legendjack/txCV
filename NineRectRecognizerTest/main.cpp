@@ -198,7 +198,9 @@ int main(int argc, char** argv)
 			
 			if (findNineRect == 0)
 				Serialport1.usart3_send(static_cast<uint8_t>(255));
+#ifdef DEBUG			
 			cout << "contours in specified range are not enough" << endl;
+#endif			
 			continue;
 		}
 
@@ -327,6 +329,7 @@ int main(int argc, char** argv)
 				if (i == 0 && min_mat(dstImage) > minGrayValue) {
 					cout << "no number in cells" << endl;
 					isEmpty = true;
+					goto NEXT;
 				}
 
 				threshold(dstImage, nineRect_mat[i], 0, 255, THRESH_OTSU);
@@ -357,6 +360,7 @@ int main(int argc, char** argv)
 		}
 
 		// 如果第一个宫格中没有数字，则跳过该帧
+NEXT:
 		if (isEmpty)
 			continue;
 

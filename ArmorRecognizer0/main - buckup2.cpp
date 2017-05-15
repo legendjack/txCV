@@ -20,9 +20,6 @@
  * version 2.0
  * 估计步兵车的运动状态，如果是匀速移动，保持移速后加上一定角度使云台跟上步兵车转动
  * 实现困难，暂时不用
- *
- * version 2.1
- * 实现了SearchWindow类，在某一帧找到装甲后，下一帧开始在SearchWindow返回的ROI区域内继续搜索目标
  */
 
 #include <pthread.h>
@@ -65,9 +62,6 @@ bool sended;					// 串口信息是否已经发送
 Point targetPoint(390, 342);
 Point centerOfArmor;
 float areaOfLightContour = 0;	// 某个灯条的面积，用于大致表示目标装甲的远近。
-SearchWindow searchWindow;		// 搜索窗口
-bool useSW = false;				// 是否使用搜索窗口
-int swSizeCache[5] = { 0,0,0,0,0 }; // 缓存 5 帧搜索窗口的尺寸（宽）
 //MyQueue mq(20);
 //bool isUniformSpeed = false;
 //Point predictPoint;				// 预测装甲板的位置
@@ -164,12 +158,6 @@ int main()
 		if (frame.empty())
 			continue;
 
-		if (useSW) {
-			Mat frameTemp(Height, Width, CV_8UC3, Scalar(0, 0, 0));
-			frame(searchWindow.getRect()).copyTo(frameTemp(searchWindow.getRect()));
-			frame = frameTemp;
-		}
-		
 #ifdef DEBUG
 		Mat frame_ = frame.clone();		// 帧图像备份，调试用
 #endif // DEBUG
@@ -201,8 +189,6 @@ int main()
 		// 如果面积在指定范围内的轮廓数量小于2，则进入下一次循环
 		if (contoursInAreaRange.size() < 2) {
 			frameCount++;
-			if (frameCount > 9)
-				useSW = false;
             if (frameCount >= 100) {
 				frameCount--;
 				yawOut = 250;
@@ -256,9 +242,6 @@ int main()
 		 * 可能是对面步兵车被打败或撤退，则发送云台静止不动的信号，等待几秒再发送云台进入搜索模式的信号
 		 */
 		if (rotatedRectsOfLights.size() == 0) {
-			if (frameCount > 9)
-				useSW = false;
-			
 			// 如果某一帧开始没有检测到装甲，frameCount自加一
             frameCount++;
             if (frameCount >= 100) {
@@ -310,29 +293,16 @@ int main()
 						tmpAngle1 = angleDifference;
 					findArmor = true;
 					
-					useSW = true;
-
-					for (int k = 0; k < 4; k++)
-						swSizeCache[k] = swSizeCache[k + 1];
-					swSizeCache[4] = rotatedRectHeight;
-					int swSizeCacheSum = 0;
-					for (int k = 0; k < 5; k++)
-						swSizeCacheSum += swSizeCache[k];
-
-					searchWindow.setCenter(centerOfArmor.x, centerOfArmor.y);
-					searchWindow.setSize(swSizeCacheSum / 5 * 15, rotatedRectHeight * 4);
-					
-					// areaOfLightContour = rotatedRectHeight * rotatedRectHeight;
+					areaOfLightContour = rotatedRectHeight * rotatedRectHeight;
 				}
 			}
 		}
 
 		if (findArmor) {
-			
-			/*if (areaOfLightContour < 200)
+			if (areaOfLightContour < 200)
 				targetPoint = Point(100, 100);
 			else if (areaOfLightContour > 200)
-				targetPoint = Point(390, 342);*/
+				targetPoint = Point(390, 342);
 
 			// 如果检测到了装甲的位置，frameCount置零，并向串口发送装甲的位置信息
 			frameCount = 0;
@@ -365,8 +335,6 @@ int main()
 		} else {
 			// 检测到灯条但是没有匹配到装甲
 			frameCount++;
-			if (frameCount > 9)
-				useSW = false;
 //			mq.clear();
 			if (frameCount < 10) {
 				if (fd >= 0)
@@ -406,7 +374,8 @@ HERE:
         cout << static_cast<int>(pitchOut) << ", " << static_cast<int>(yawOut) << endl;
 		imshow(WINNAME, frame_);
 
-		imshow(WINNAME, frame_);
+		if (showBinaryImage)
+			imshow(WINNAME1, binaryImage_);
 
 		int key = waitKey(1);
 		if (key == 27) {

@@ -104,4 +104,109 @@ void exchange(float &a, float &b) {
     b = temp;
 }
 
+class SearchWindow {
+private:
+	int centerX;
+	int centerY;
+
+public:
+	int width;
+	int height;
+
+	SearchWindow() {
+		centerX = 0;
+		centerY = 0;
+		width = 0;
+		height = 0;
+	}
+	SearchWindow(int _centerX, int _centerY, int _width, int _height) {
+		if (_centerX < 0)
+			centerX = 0;
+		else if (_centerX > 799)
+			centerX = 799;
+		else
+			centerX = _centerX;
+
+		if (_centerY < 0)
+			centerY = 0;
+		else if (_centerY > 599)
+			centerY = 599;
+		else
+			centerY = _centerY;
+
+		if (_width > 800)
+			width = 800;
+		else
+			width = _width;
+
+		if (_height > 600)
+			height = 600;
+		else
+			height = _height;
+	}
+	~SearchWindow() {};
+
+	void setCenter(int _centerX, int _centerY) {
+		if (_centerX < 0)
+			centerX = 0;
+		else if (_centerX > 799)
+			centerX = 799;
+		else
+			centerX = _centerX;
+
+		if (_centerY < 0)
+			centerY = 0;
+		else if (_centerY > 599)
+			centerY = 599;
+		else
+			centerY = _centerY;
+	}
+
+	void setSize(int _width, int _height) {
+		if (_width > 800)
+			width = 800;
+		else
+			width = _width;
+
+		if (_height > 600)
+			height = 600;
+		else
+			height = _height;
+	}
+
+	void zoomIn() {
+		width = width * 2;
+	}
+
+	Rect getRect() {
+		Rect rect;
+
+		if ((centerX + width / 2) > 799)
+			rect.width = 800 - (centerX - width / 2);
+		else if (centerX < width / 2)
+			rect.width = centerX + width / 2;
+		else
+			rect.width = width;
+
+		if ((centerY + height / 2) > 599)
+			rect.height = 600 - (centerY - height / 2);
+		else if (centerY < height / 2)
+			rect.height = centerY + height / 2;
+		else
+			rect.height = height;
+
+		if ((centerX - width / 2) < 0)
+			rect.x = 0;
+		else
+			rect.x = centerX - width / 2;
+
+		if ((centerY - height / 2) < 0)
+			rect.y = 0;
+		else
+			rect.y = centerY - height / 2;
+
+		return rect;
+	}
+};
+
 #endif
