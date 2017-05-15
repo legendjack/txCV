@@ -3,7 +3,7 @@
 #include "functions.h"
 #include "serialsom.h"
 
-#define DEBUG
+//#define DEBUG
 
 const int Width = 800;		// 视频宽
 const int Height = 600;		// 视频高
@@ -61,20 +61,22 @@ int main(int argc, char** argv)
 	fs["t1"] >> t1;
 	fs["t2"] >> t2;
 	fs["recordVideo"] >> recordVideo;
-	fs["videoName"] >> videoName;
 
 	fs.release();
 	
 	if (recordVideo) {
+		FileStorage fs1("record.xml", FileStorage::READ);
+		fs1["videoName"] >> videoName;
+		fs1.release();
 		stringstream ss;
 		ss << videoName;
 		string s = ss.str();
 		int fourcc = CV_FOURCC('M', 'J', 'P', 'G');
 		writer.open(s + ".avi", fourcc, 25.0, Size(Width, Height));
 		videoName++;
-		FileStorage fs("record.xml", FileStorage::WRITE);
-		fs << "videoName" << videoName;
-		fs.release();
+		FileStorage fs2("record.xml", FileStorage::WRITE);
+		fs2 << "videoName" << videoName;
+		fs2.release();
 	}
 	
 	// 打开摄像头
@@ -610,7 +612,7 @@ NEXT:
 #endif
 		
 		// 打印输出密码区和九宫格区的数字
-//#ifdef DEBUG
+#ifdef DEBUG
 
 		for (int i = 0; i < 5; i++)
 			cout << password[i];
@@ -625,7 +627,7 @@ NEXT:
 			waitKey(0);
 		else if (key == 27)
 			break;
-//#endif
+#endif
 	}
 
 	cap.release();
