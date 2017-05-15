@@ -72,7 +72,7 @@ int main(int argc, char** argv)
 		int fourcc = CV_FOURCC('M', 'J', 'P', 'G');
 		writer.open(s + ".avi", fourcc, 25.0, Size(Width, Height));
 		videoName++;
-		FileStorage fs("config.xml", FileStorage::WRITE);
+		FileStorage fs("record.xml", FileStorage::WRITE);
 		fs << "videoName" << videoName;
 		fs.release();
 	}

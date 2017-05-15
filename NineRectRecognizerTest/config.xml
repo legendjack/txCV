@@ -5,10 +5,10 @@
   <filename>"16.avi"</filename>
 
   <!-- 宫格内的最低灰度值，低于该灰度值则认为没有数字 -->
-  <minGrayValue>30</minGrayValue>
+  <minGrayValue>50</minGrayValue>
 
   <!-- 数码管分割灰度阈值 -->
-  <ninxiTubeGrayValue>180</ninxiTubeGrayValue>
+  <ninxiTubeGrayValue>200</ninxiTubeGrayValue>
   
   <!-- Canny 阈值 -->
   <t1>200</t1>
@@ -16,9 +16,6 @@
   
   <!-- 是否录像，0-不录，1-录像 -->
   <recordVideo>0</recordVideo>
-  
-  <!-- 录像名称 -->
-  <videoName>0</videoName>
   
   <!-- 相机分辨率 -->
   <Width>800</Width>
