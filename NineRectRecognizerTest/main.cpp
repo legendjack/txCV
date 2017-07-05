@@ -33,6 +33,7 @@ bool foundNixieTubeArea = false;	// 是否发现数码管区
 bool isEmpty = false;				// 宫格中是否有数字
 bool passwordChanged = true;		// 密码区是否改变	
 bool nineNumberChanged = true;		// 九宫格区是否改变
+bool getNinxiTubeGrayValue = false;
 
 int recordVideo = 0;				// 是否录像
 int videoName;						// 录像文件名
@@ -89,14 +90,14 @@ int main(int argc, char** argv)
  	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
 
 	// 开启读取视频帧的线程
-	pthread_t id;
+/*	pthread_t id;
 	int ret = pthread_create(&id, NULL, capFrameThread, NULL);
 	if (!ret) {
 		cout << "open thread to capture frame: success" << endl;
 	} else {
 		cout << "open thread to capture frame: failed" << endl;
 	}
-	
+*/
 	element0 = getStructuringElement(MORPH_ELLIPSE, Size(3, 3));
 	element1 = getStructuringElement(MORPH_ELLIPSE, Size(5, 5));
 	element2 = getStructuringElement(MORPH_ELLIPSE, Size(2, 2));
@@ -167,10 +168,13 @@ int main(int argc, char** argv)
 	/*                         开始检测每一帧图像                             */
 	/************************************************************************/
 	while (true) {
-		// cap >> frame;
+		cap >> frame;
 
 		if (frame.empty())
 			continue;
+		
+		if (recordVideo)
+			writer.write(frame);
 		
 		cvtColor(frame, gray_img, COLOR_BGR2GRAY);
 		Canny(gray_img, canny_img, t1, t2);
@@ -326,12 +330,21 @@ int main(int argc, char** argv)
 				Mat dstImage(40, 40, CV_8UC1, Scalar(0));
 				warpPerspective(gray_img, dstImage, warpMat, dstImage.size());
 
+				if (!getNinxiTubeGrayValue) {
+					Mat matTemp;
+					double thres = threshold(dstImage, matTemp, 0, 255, THRESH_OTSU);
+					if (thres > 40 && thres < 100) {
+						minGrayValue = thres - 25;
+						getNinxiTubeGrayValue = true;
+					}
+				}
+				
 				// 九宫格内的数字在两次变换之间有短暂时间没有内容（空白）
 				// 这里通过最低灰度值来判断是否存在数字
-				if (i == 0 && min_mat(dstImage) > minGrayValue) {
+				if (min_mat(dstImage) > minGrayValue) {
 					cout << "no number in cells" << endl;
 					isEmpty = true;
-					goto NEXT;
+					break;
 				}
 
 				threshold(dstImage, nineRect_mat[i], 0, 255, THRESH_OTSU);
@@ -362,7 +375,7 @@ int main(int argc, char** argv)
 		}
 
 		// 如果第一个宫格中没有数字，则跳过该帧
-NEXT:
+//NEXT:
 		if (isEmpty)
 			continue;
 
@@ -573,8 +586,8 @@ NEXT:
 			if (password[i] != passwordLast[i])
 				changedNum++;
 		
-		// 如果有超过两个数码管显示的数字变化，则认为密码改变，当前目标为第一个数码管显示的数字
-		if (changedNum > 2) {
+		// 如果有两个（或更多）数码管显示的数字变化，则认为密码改变，当前目标为第一个数码管显示的数字
+		if (changedNum > 1) {
 			currentNumberCount = 0;
 			
 			for (int i = 0; i < 5; i++)
@@ -585,10 +598,10 @@ NEXT:
 		changedNum = 0;
 		for (int i = 0; i < 9; i++)
 			if (nineNumber[i] != nineNumberLast[i])
-				changedNum++;		
+				changedNum++;
 		
 		// 九宫格区已经改变，则查找当前目标数码管的数字在九宫格中的位置，然后目标数码管向右移动一个
-		if (changedNum > 4) {
+		if (changedNum > 3) {
 			for (int i = 0; i < 9; i++) {
 				if (password[currentNumberCount] == nineNumber[i]) {
 #ifdef DEBUG
@@ -605,6 +618,8 @@ NEXT:
 			for (int i = 0; i < 9; i++)
 				nineNumberLast[i] = nineNumber[i];
 		}
+		
+		getNinxiTubeGrayValue = false;
 		
 #ifdef DEBUG
 		imshow("frame", frame);

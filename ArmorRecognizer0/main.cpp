@@ -1,31 +1,4 @@
-/* version 1.3
- * 提高分辨率：800*600
- * 提高帧率：cap.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));
- *			 cap.set(CAP_PROP_FPS, 60);
- * 提高饱和度：cap.set(CV_CAP_PROP_SATURATION, 80);
- * 提高饱和度和分辨率可以提高检测装甲的距离
- *
- * version 1.2
- * 修复BUG：没有检测到装甲，云台就会立刻归位的BUG
- * 添加预测
- *
- * version 1.3
- * 多线程，一个线程专门读取视频帧，另一个线程处理视频帧
- *
- * version 1.4
- * 去掉了KalmanFilter：KF利用目标在两帧间的位置得到速度，但是云台转速稳定后，目标
- * 在画面中的位置相对固定（因为摄像头是固定在云台上的），计算出来的速度为0，所以KF失效
- * 添加鼠标响应获取targetPoint
- *
- * version 2.0
- * 估计步兵车的运动状态，如果是匀速移动，保持移速后加上一定角度使云台跟上步兵车转动
- * 实现困难，暂时不用
- *
- * version 2.1
- * 实现了SearchWindow类，在某一帧找到装甲后，下一帧开始在SearchWindow返回的ROI区域内继续搜索目标
- */
-
-#include <pthread.h>
+//#include <pthread.h>
 #include <stdio.h>
 #include <iostream>
 #include <opencv2/opencv.hpp>
@@ -39,9 +12,10 @@
 #define WINNAME1 "Binary Image"
 #define MaxContourArea 450		// 面积大于该值的轮廓不是装甲的灯条
 #define MinContourArea 15		// 面积小于该值的轮廓不是装甲的灯条
-#define Width	800				// 视频宽
-#define Height	600				// 视频高
+#define Width	640				// 视频宽
+#define Height	480				// 视频高
 #define DEBUG
+//#define SEND
 
 // 全局变量
 VideoCapture cap;
@@ -50,44 +24,36 @@ Mat frame, gray;				// 视频帧及其灰度图
 Mat binaryImage, hsvImage;		// 二值图及HSV图，使用cvtColor得到
 Mat element, element1;			// 开运算参数
 string fileName;				// 视频的文件名
-int m_threshold;				// 阈值
 bool showBinaryImage = false;	// 是否显示二值图
+int key = 0;					// waitKey() 返回值
+int m_threshold;				// 灰度阈值
 int detectColor;				// 敌军装甲的颜色：0-红色，1-蓝色
-//int disX, disY, disZ;
 float tmpAngle0;
 float tmpAngle1;
-uint8_t yawOut = 250;
-uint8_t pitchOut = 250;
+uint8_t yawOut = 250;			// 发送的 yaw 值
+uint8_t pitchOut = 250;			// 发送的 pitch 值
+uint8_t shot = 0;				// 是否射击
 int frameCount = 150;
+int frameCount1 = 0;
 int lightsCount = 0;			// 图像中装甲灯条的数量
-bool findArmor;
-bool sended;					// 串口信息是否已经发送
-Point targetPoint(390, 342);
+bool findArmor;					// 是否检测到装甲
+Point targetPoint(370, 340);
 Point centerOfArmor;
 float areaOfLightContour = 0;	// 某个灯条的面积，用于大致表示目标装甲的远近。
-SearchWindow searchWindow;		// 搜索窗口
+SearchWindow searchWindow(Width, Height);		// 搜索窗口
 bool useSW = false;				// 是否使用搜索窗口
 int swSizeCache[5] = { 0,0,0,0,0 }; // 缓存 5 帧搜索窗口的尺寸（宽）
-//MyQueue mq(20);
-//bool isUniformSpeed = false;
-//Point predictPoint;				// 预测装甲板的位置
 
-// 计算直方图需要的参数
-Mat hMat, sMat, vMat;			// HSV单通道图
-int channels = 0;				// 计算第0个通道的直方图，calcHist参数
-int sizeHist = 180;				// 180个色度，calcHist参数
-MatND dstHist;					// calcHist结果
-
-// 卡尔曼滤波器参数
-//const int stateNum = 4;			// 状态值4×1向量(x,y,△x,△y)
-//const int measureNum = 2;		// 测量值2×1向量(x,y)
-//Mat measurement = Mat::zeros(measureNum, 1, CV_32F); // 初始测量值x'(0)，因为后面要更新这个值，所以必须先定义
+Mat bMat, gMat, rMat;			// BGR单通道图
 
 void on_Mouse(int event, int x, int y, int flags, void*);
 void* capFrameThread(void *arg);
 
 int main()
 {
+	sleep(1);
+	
+#ifdef SEND
 	// 初始化串口类
 	Serialport Serialport1("/dev/ttyUSB0");
 	int fd = Serialport1.open_port("/dev/ttyUSB0");
@@ -96,7 +62,8 @@ int main()
 		fd = Serialport1.open_port("/dev/ttyUSB0");
 	}
 	Serialport1.set_opt(115200, 8, 'N', 1);
- 
+#endif 
+
 	/***************************************
 			读取 video.cfg 里面的键值对
 	****************************************/
@@ -115,12 +82,10 @@ int main()
 
 	element = getStructuringElement(MORPH_ELLIPSE, Size(2, 2));
 	element1 = getStructuringElement(MORPH_ELLIPSE, Size(5, 5));
-	hMat.create(Size(Width, Height), CV_8UC1);
-	sMat.create(Size(Width, Height), CV_8UC1);
-	vMat.create(Size(Width, Height), CV_8UC1);
-	Mat chan[3] = { hMat, sMat, vMat };
-	float hranges[] = { 0, 180 };
-	const float *ranges[] = { hranges };
+	bMat.create(Size(Width, Height), CV_8UC1);
+	gMat.create(Size(Width, Height), CV_8UC1);
+	rMat.create(Size(Width, Height), CV_8UC1);
+	Mat chan[3] = { bMat, gMat, rMat };
 
 	vector<RotatedRect> rotatedRects;			// 对面积在指定范围内的轮廓拟合椭圆，得到相应的旋转矩形
 	vector<RotatedRect> rotatedRectsOfLights;	// 蓝色/红色灯条的RotatedRect
@@ -128,12 +93,11 @@ int main()
 #ifdef DEBUG
 	namedWindow(WINNAME, WINDOW_AUTOSIZE);
 	createTrackbar("Threshold", WINNAME, &m_threshold, 255, 0);
-	//createTrackbar("t1", WINNAME, &t1, 200);
-	setMouseCallback(WINNAME, on_Mouse);					// 鼠标响应函数获取targetPoint
+	setMouseCallback(WINNAME, on_Mouse);		// 鼠标响应函数获取targetPoint
 #endif
 
-	//VideoCapture cap(fileName);
-	cap.open(0);	
+	VideoCapture cap("1.avi");
+	/*cap.open(0);
 	while (!cap.isOpened()) {
 		sleep(1);
 		cap.open(0);
@@ -141,16 +105,16 @@ int main()
 	//cap.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));	// 需要在设置宽高之前设置，否则无效
 	//cap.set(CV_CAP_PROP_SATURATION, 80);
 	cap.set(CAP_PROP_FRAME_WIDTH, Width);
-	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
+	cap.set(CAP_PROP_FRAME_HEIGHT, Height);*/
 
-	// 开启读取视频帧的线程
-	pthread_t id;
+	// 开启读取视频帧的线程（貌似程序在有些计算机上运行会因此崩溃）
+/*	pthread_t id;
 	int ret = pthread_create(&id, NULL, capFrameThread, NULL);
 	if (!ret) {
 		cout << "open thread to capture frame: success" << endl;
 	} else {
 		cout << "open thread to capture frame: failed" << endl;
-	}
+	}*/
 
 	/***************************************
 				开始处理每一帧
@@ -158,12 +122,17 @@ int main()
 	while (true)
 	{
 		// double time0 = static_cast<double>(getTickCount());
+		cap >> frame;
 
-		sended = false;
-
-		if (frame.empty())
+		if (frame.empty()) {
+#ifdef DEBUG
+			break;
+#else
 			continue;
+#endif
+		}
 
+		// 如果当前帧使用搜索窗口，则仅保留目标区域图像，其他区域改为黑色
 		if (useSW) {
 			Mat frameTemp(Height, Width, CV_8UC3, Scalar(0, 0, 0));
 			frame(searchWindow.getRect()).copyTo(frameTemp(searchWindow.getRect()));
@@ -174,21 +143,21 @@ int main()
 		Mat frame_ = frame.clone();		// 帧图像备份，调试用
 #endif // DEBUG
 
-		cvtColor(frame, gray, COLOR_BGR2GRAY);
+		split(frame, chan);
 
-		cvtColor(frame, hsvImage, COLOR_BGR2HSV);
+		cvtColor(frame, gray, COLOR_BGR2GRAY);
 
 		threshold(gray, binaryImage, m_threshold, 255, THRESH_BINARY);
 
 		morphologyEx(binaryImage, binaryImage, MORPH_OPEN, element);	// 开运算，先腐蚀，后膨胀。去掉小的白色轮廓
 
 #ifdef DEBUG
-		Mat binaryImage_ = binaryImage.clone();  // 二值图像备份，调试用
+		Mat binaryImage_ = binaryImage.clone();		// 二值图像备份，调试用
 #endif
 
 		// 寻找轮廓，注意参数四不能设为 CHAIN_APPROX_SIMPLE，因为如果如果这样设置，表示一个轮廓的点的数量可能少于4
 		// 而 fitEllipse 函数要求点的数量不能小于 4 ，否则会报错
-		vector<vector<Point> > contours;		// 所有轮廓，findContours函数的结果
+		vector<vector<Point> > contours;		// 所有轮廓
 		findContours(binaryImage, contours, RETR_EXTERNAL, CHAIN_APPROX_NONE);
 
 		vector<vector<Point> > contoursInAreaRange;	// 面积在(MinContourArea, MaxContourArea)范围内的轮廓
@@ -198,62 +167,52 @@ int main()
 				contoursInAreaRange.push_back(contours[i]);
 		}
 
-		// 如果面积在指定范围内的轮廓数量小于2，则进入下一次循环
+		// 如果面积在指定范围内的轮廓数量小于2，则进入下一次循环（注意这种情况比较少）
 		if (contoursInAreaRange.size() < 2) {
 			frameCount++;
 			if (frameCount > 9)
 				useSW = false;
-            if (frameCount >= 100) {
+            if (frameCount >= 60) {
 				frameCount--;
 				yawOut = 250;
 				pitchOut = 250;
+				shot = 0;
 			}
 			goto HERE;
 		}
 
-		// 对面积在指定范围内的轮廓拟合椭圆，得到相应的旋转矩形
-		rotatedRects.clear();
-		for (int i = 0; i < contoursInAreaRange.size(); i++)
-			rotatedRects.push_back(fitEllipse(contoursInAreaRange[i]));
-
-		/* 为每一个符合条件的RotatedRect制作一个掩模，然后计算掩模区域的直方图，
-		 * 通过直方图判断该RotatedRect的主要颜色是红色还是蓝色
-		 */
+		// 得到轮廓的旋转矩形 RotatedRect
+		// 为每一个符合条件的 RotatedRect 制作一个掩模，判断掩模区域的主要颜色是红色还是蓝色
 		rotatedRectsOfLights.clear();
-		split(hsvImage, chan);						// 把HSV图像分为3个通道，用于计算直方图
-		for (int i = 0; i < rotatedRects.size(); i++) {
-			Point2f pointTemp[4];
-			rotatedRects[i].points(pointTemp);		// 得到旋转矩形的4个角点
-			vector<Point> corners;
-			for (int j = 0; j < 4; j++)
-				corners.push_back(pointTemp[j]);
+		for (int i = 0; i < contoursInAreaRange.size(); i++) {
+			RotatedRect rotatedRectTemp = fitEllipse(contoursInAreaRange[i]);
+			float tmpA = rotatedRectTemp.angle;		// 旋转矩形的角度
+			if (tmpA > 25 && tmpA < 155)			// 旋转矩形的角度是否在指定范围内
+				continue;
 
-			vector<vector<Point> > corners_;
-			corners_.push_back(corners);
-			Mat mask(Height, Width, CV_8UC1, Scalar::all(0));
-			drawContours(mask, corners_, -1, Scalar(255), -1, LINE_AA);	// 绘制掩模
-			dilate(mask, mask, element1);								// 膨胀处理
-			calcHist(&hMat, 1, &channels, mask, dstHist, 1, &sizeHist, ranges);	// 计算掩模的直方图
+			Mat mask(Height, Width, CV_8UC1, Scalar(0));
+			drawContours(mask, contoursInAreaRange, i, Scalar(255), -1);	// 绘制（轮廓的）掩模
+			dilate(mask, mask, element1);
+			Mat mask1;
+			dilate(mask, mask1, element1);
+			bitwise_not(mask, mask);
+			Mat mask2;								// 带形掩模，白色轮廓周围的光带
+			bitwise_and(mask, mask1, mask2);
 
-			float tmpA = rotatedRects[i].angle;
-			float HdivideW = rotatedRects[i].size.height / rotatedRects[i].size.width;
-			if (HdivideW < 1)
-				HdivideW = 1 / HdivideW;
+			bool b1 = false;
+			if (detectColor)
+				b1 = JudgeColor(bMat, rMat, 90, mask2);		// 蓝色装甲
+			else
+				b1 = JudgeColor(rMat, bMat, 60, mask2);		// 红色装甲
 
-			bool b1 = false, b2 = false;
-			if (!(tmpA > 25 && tmpA < 155))
-				b1 = true;
-			if (HdivideW > 2.5 && HdivideW < 8.0)
-				b2 = true;
-
-			if ((JudgeColor(dstHist) == detectColor) && b1) {
-				rotatedRectsOfLights.push_back(rotatedRects[i]);
+			if (b1) {
+				rotatedRectsOfLights.push_back(rotatedRectTemp);
 			}
 		}
 
-		/* 如果检测到灯条的数量等于0，则发送未检测到目标的信号，进入下一帧
+		/* 如果检测到灯条的数量等于0，则发送未检测到目标的信号，进入下一帧（这种情况较多）
 		 * 如果之前检测到了装甲（frameCount=0），而后又出现灯条数量为0的情况
-		 * 可能是对面步兵车被打败或撤退，则发送云台静止不动的信号，等待几秒再发送云台进入搜索模式的信号
+		 * 可能是对面步兵车被打败、撤退或者移动，发送云台静止不动的信号，等待几秒再发送云台进入搜索模式的信号
 		 */
 		if (rotatedRectsOfLights.size() == 0) {
 			if (frameCount > 9)
@@ -261,14 +220,15 @@ int main()
 			
 			// 如果某一帧开始没有检测到装甲，frameCount自加一
             frameCount++;
-            if (frameCount >= 100) {
-				// 如果连续150帧没有检测到装甲，则认定为没有目标，串口发送信息进入搜索模式
+            if (frameCount <= 60) {
+				pitchOut = 100;
+				yawOut = 100;
+            } else {
+				// 如果连续60帧没有检测到装甲，则认定为没有目标，串口发送信息进入搜索模式
                 frameCount--;
                 pitchOut = 250;
 				yawOut = 250;
-            } else {
-				pitchOut = 100;
-				yawOut = 100;
+				shot = 0;
 			}
 			goto HERE;
 		}
@@ -329,11 +289,6 @@ int main()
 
 		if (findArmor) {
 			
-			/*if (areaOfLightContour < 200)
-				targetPoint = Point(100, 100);
-			else if (areaOfLightContour > 200)
-				targetPoint = Point(390, 342);*/
-
 			// 如果检测到了装甲的位置，frameCount置零，并向串口发送装甲的位置信息
 			frameCount = 0;
 
@@ -359,19 +314,17 @@ int main()
 
 			yawOut = static_cast<uint8_t>(disX);
 			pitchOut = static_cast<uint8_t>(disY);
+			shot = 1;
 
- 			if (fd >= 0)
-				sended = Serialport1.usart3_send(pitchOut, yawOut, static_cast<uint8_t>(10));	// 发送竖直方向和水平方向移动速度
 		} else {
+			
 			// 检测到灯条但是没有匹配到装甲
 			frameCount++;
-			if (frameCount > 9)
+			if (frameCount > 6)
 				useSW = false;
-//			mq.clear();
-			if (frameCount < 10) {
-				if (fd >= 0)
-					sended = Serialport1.usart3_send(pitchOut, yawOut, static_cast<uint8_t>(10));
-			} else { // if (rotatedRectsOfLights.size() >= 2)
+			
+			if (frameCount > 10) {
+				
 				// 如果没有检测到装甲，且画面中灯条的数量大于2,则向窗口发送灯条的位置信息
 				int disX = rotatedRectsOfLights[0].center.x - targetPoint.x;
 				int disY = rotatedRectsOfLights[0].center.y - targetPoint.y;
@@ -391,31 +344,30 @@ int main()
 
 				yawOut = static_cast<uint8_t>(disX);
 				pitchOut = static_cast<uint8_t>(disY);
-
-				if (fd >= 0)
-					sended = Serialport1.usart3_send(pitchOut, yawOut, static_cast<uint8_t>(10));	// 发送竖直方向和水平方向移动速度
+				shot = 0;		
 			}
 		}
 
 HERE:
-		if (!sended)
-			Serialport1.usart3_send(pitchOut, yawOut, static_cast<uint8_t>(10));
+
+#ifdef SEND
+		Serialport1.usart3_send(pitchOut, yawOut, shot);
+#endif
 		//time0 = ((double)getTickCount() - time0) / getTickFrequency();
 		//cout << "time : " << time0 * 1000 << "ms"  << endl;
 #ifdef DEBUG
-        cout << static_cast<int>(pitchOut) << ", " << static_cast<int>(yawOut) << endl;
-		imshow(WINNAME, frame_);
+        cout << static_cast<int>(pitchOut) << ", " << static_cast<int>(yawOut) << ", " << static_cast<int>(shot) << endl;
 
 		imshow(WINNAME, frame_);
 
-		int key = waitKey(1);
+		key = (waitKey(30)&255);
 		if (key == 27) {
 			break;
 		}  else if (key == int('0')) {
 			if (showBinaryImage)	// 如果这时候窗口是显示的，则关闭它
 				destroyWindow(WINNAME1);
 			showBinaryImage = !showBinaryImage;
-		} else if (key == int('1')) {
+		} else if (key == 32) {
 			waitKey(0);
 		}
 #endif

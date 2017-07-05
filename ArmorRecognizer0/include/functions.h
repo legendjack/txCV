@@ -44,6 +44,25 @@ void choise(int *a, int *b, int n)
 	}
 }
 
+// 通过计算掩模区域目标颜色通道的灰度值，判断目标轮廓是否为指定颜色
+bool JudgeColor(Mat _m1, Mat _m2, uchar _threshold, Mat mask) {
+	int _size = _m1.cols * _m1.rows;
+	int _sum = 0;
+	int _total = 0;
+	for (int i = 0; i < _size; i++) {
+		if (mask.data[i]) {
+			if ((_m1.data[i] - _m2.data[i]) > _threshold)
+				_sum++;
+			_total++;
+		}
+	}
+	
+	if (float(_sum) / _total > 0.3)
+		return true;
+	else
+		return false;
+}
+
 // 计算直方图中分布最多的颜色（白色除外），选取前20个分布最多对的颜色值，看哪个区域最多
 int JudgeColor(MatND hist)
 {
@@ -108,6 +127,8 @@ class SearchWindow {
 private:
 	int centerX;
 	int centerY;
+	int windowHeight;
+	int windowWidth;
 
 public:
 	int width;
@@ -118,29 +139,44 @@ public:
 		centerY = 0;
 		width = 0;
 		height = 0;
+		windowHeight = 0;
+		windowWidth = 0;
 	}
-	SearchWindow(int _centerX, int _centerY, int _width, int _height) {
+
+	SearchWindow(int _windowWidth, int _windowHeight) {
+		centerX = 0;
+		centerY = 0;
+		width = 0;
+		height = 0;
+		windowHeight = _windowHeight;
+		windowWidth = _windowWidth;
+	}
+
+	SearchWindow(int _centerX, int _centerY, int _width, int _height, int _windowWidth, int _windowHeight) {
+		windowHeight = _windowHeight;
+		windowWidth = _windowWidth;
+
 		if (_centerX < 0)
 			centerX = 0;
-		else if (_centerX > 799)
-			centerX = 799;
+		else if (_centerX >= windowWidth)
+			centerX = windowWidth - 1;
 		else
 			centerX = _centerX;
 
 		if (_centerY < 0)
 			centerY = 0;
-		else if (_centerY > 599)
-			centerY = 599;
+		else if (_centerY >= windowHeight)
+			centerY = windowHeight - 1;
 		else
 			centerY = _centerY;
 
-		if (_width > 800)
-			width = 800;
+		if (_width > windowWidth)
+			width = windowWidth;
 		else
 			width = _width;
 
-		if (_height > 600)
-			height = 600;
+		if (_height > windowHeight)
+			height = windowHeight;
 		else
 			height = _height;
 	}
@@ -149,27 +185,27 @@ public:
 	void setCenter(int _centerX, int _centerY) {
 		if (_centerX < 0)
 			centerX = 0;
-		else if (_centerX > 799)
-			centerX = 799;
+		else if (_centerX >= windowWidth)
+			centerX = windowWidth - 1;
 		else
 			centerX = _centerX;
 
 		if (_centerY < 0)
 			centerY = 0;
-		else if (_centerY > 599)
-			centerY = 599;
+		else if (_centerY >= windowHeight)
+			centerY = windowHeight - 1;
 		else
 			centerY = _centerY;
 	}
 
 	void setSize(int _width, int _height) {
-		if (_width > 800)
-			width = 800;
+		if (_width > windowWidth)
+			width = windowWidth;
 		else
 			width = _width;
 
-		if (_height > 600)
-			height = 600;
+		if (_height > windowHeight)
+			height = windowHeight;
 		else
 			height = _height;
 	}
@@ -181,15 +217,15 @@ public:
 	Rect getRect() {
 		Rect rect;
 
-		if ((centerX + width / 2) > 799)
-			rect.width = 800 - (centerX - width / 2);
+		if ((centerX + width / 2) >= windowWidth)
+			rect.width = windowWidth - (centerX - width / 2);
 		else if (centerX < width / 2)
 			rect.width = centerX + width / 2;
 		else
 			rect.width = width;
 
-		if ((centerY + height / 2) > 599)
-			rect.height = 600 - (centerY - height / 2);
+		if ((centerY + height / 2) >= windowHeight)
+			rect.height = windowHeight - (centerY - height / 2);
 		else if (centerY < height / 2)
 			rect.height = centerY + height / 2;
 		else
