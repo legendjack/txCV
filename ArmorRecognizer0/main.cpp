@@ -256,7 +256,7 @@ int main()
 					continue;
 				if ((angleDifference < 10 || angleDifference > 170) &&
 					(angleDifference < tmpAngle0 || angleDifference > tmpAngle1) &&
-					yDifference < 7) {
+					yDifference < 15) {
 #ifdef DEBUG
 					circle(frame_, rotatedRectsOfLights[i].center, 3, Scalar(0, 0, 255), -1, LINE_AA);
 					circle(frame_, rotatedRectsOfLights[j].center, 3, Scalar(0, 0, 255), -1, LINE_AA);

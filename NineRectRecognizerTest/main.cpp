@@ -1,9 +1,10 @@
-#include <pthread.h>
+//#include <pthread.h>
 #include <sstream>
 #include "functions.h"
 #include "serialsom.h"
 
-//#define DEBUG
+//#define SEND				// 如需要串口发送，取消注释
+#define DEBUG
 
 const int Width = 800;		// 视频宽
 const int Height = 600;		// 视频高
@@ -18,7 +19,9 @@ VideoWriter writer;
 Mat frame, gray_img, canny_img;
 Mat element0, element1, element2;
 
-int t1 = 200, t2 = 250;		// canny阈值
+Point2f srcPoints[4];		// 透视变换 srcPoints
+Point2f dstPoints[4];		// 透视变换 dstPoints
+int t1 = 100, t2 = 200;		// canny阈值
 int password[5];			// 密码区（数码管）的 5 个数字
 int passwordLast[5];		// 上一帧检识别出的密码，和当前帧做对比，如果有超过 3 个数字改变则认为密码改变
 int nineNumber[9];			// 九宫格区的 9 个数字
@@ -35,14 +38,20 @@ bool passwordChanged = true;		// 密码区是否改变
 bool nineNumberChanged = true;		// 九宫格区是否改变
 bool getNinxiTubeGrayValue = false;
 
+bool distinguishBuff = true;
+int bigBuff = 0;					// 九宫格是大符还是小符，0——小符，1——大符，-1——不确定
+int frameCount = 0;
 int recordVideo = 0;				// 是否录像
 int videoName;						// 录像文件名
 int findNineRect = 0;				// 0 - 未发现九宫格，20 - 发现九宫格
+int key;
 
 void* capFrameThread(void *arg);
 
 int main(int argc, char** argv)
 {
+
+#ifdef SEND	
 	// 初始化串口
 	Serialport Serialport1("/dev/ttyTHS0");
 	int fd = Serialport1.open_port("/dev/ttyTHS0");
@@ -51,6 +60,7 @@ int main(int argc, char** argv)
 		fd = Serialport1.open_port("/dev/ttyTHS0");
 	}
 	Serialport1.set_opt(115200, 8, 'N', 1);
+#endif
 	
 	// 读取配置文件
 	FileStorage fs("config.xml", FileStorage::READ);
@@ -80,15 +90,16 @@ int main(int argc, char** argv)
 		fs2.release();
 	}
 	
+	cap.open("output3.avi");
 	// 打开摄像头
- 	cap.open(0);
+/* 	cap.open(0);
 	while (!cap.isOpened()) {
 		sleep(1);
 		cap.open(0);
 	}
 	cap.set(CAP_PROP_FRAME_WIDTH, Width);
  	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
-
+*/
 	// 开启读取视频帧的线程
 /*	pthread_t id;
 	int ret = pthread_create(&id, NULL, capFrameThread, NULL);
@@ -101,6 +112,14 @@ int main(int argc, char** argv)
 	element0 = getStructuringElement(MORPH_ELLIPSE, Size(3, 3));
 	element1 = getStructuringElement(MORPH_ELLIPSE, Size(5, 5));
 	element2 = getStructuringElement(MORPH_ELLIPSE, Size(2, 2));
+	
+	dstPoints[0] = Point2f(0, 0);
+	dstPoints[1] = Point2f(40, 0);
+	dstPoints[2] = Point2f(40, 40);
+	dstPoints[3] = Point2f(0, 40);
+	
+	Mat warpMat(2, 4, CV_32FC1);
+	Mat dstImage(40, 40, CV_8UC1);
 	
 	/************************************************************************/
 	/*                     初始化KNearest数字识别（手写体）                   */
@@ -165,22 +184,55 @@ int main(int argc, char** argv)
 	vector<float> descriptors1;
 
 	/************************************************************************/
+	/*					    初始化 KNearest 小符检测	                    */
+	/************************************************************************/
+	FileStorage fsClassifications2("classifications2.xml", FileStorage::READ);
+	if (!fsClassifications2.isOpened()) {
+		cout << "ERROR, cannot open classifications2.xml\n\n";
+		return 0;
+	}
+	Mat matClassificationInts2;
+	fsClassifications2["classifications"] >> matClassificationInts2;
+	fsClassifications2.release();
+	FileStorage fsTrainingImages2("images2.xml", FileStorage::READ);
+	if (!fsTrainingImages2.isOpened()) {
+		cout << "ERROR, cannot open images2.xml\n\n";
+		return 0;
+	}
+	Mat matTrainingImagesAsFlattenedFloats2;  // we will read multiple images into this single image variable as though it is a vector
+	fsTrainingImages2["images"] >> matTrainingImagesAsFlattenedFloats2;  // 把 images.xml 中的 images 读取进Mat变量
+	fsTrainingImages2.release();
+	Ptr<ml::KNearest> kNearest2(ml::KNearest::create());
+	kNearest2->train(matTrainingImagesAsFlattenedFloats2, ml::ROW_SAMPLE, matClassificationInts2);
+	HOGDescriptor *hog2 = new HOGDescriptor(Size(40, 40), Size(16, 16), Size(8, 8), Size(8, 8), 9);
+	vector<float> descriptors2;
+	
+	/************************************************************************/
 	/*                         开始检测每一帧图像                             */
 	/************************************************************************/
 	while (true) {
+		
 		cap >> frame;
 
-		if (frame.empty())
+		if (frame.empty()) {
+#ifdef DEBUG		
+			break;
+#else
 			continue;
+#endif
+		}
 		
 		if (recordVideo)
 			writer.write(frame);
 		
 		cvtColor(frame, gray_img, COLOR_BGR2GRAY);
 		Canny(gray_img, canny_img, t1, t2);
-		dilate(canny_img, canny_img, element0);	// 膨胀
+		dilate(canny_img, canny_img, element2);	// 膨胀
 		
 #ifdef DEBUG
+		key = (waitKey(10) & 255);
+		if (key == 32) waitKey(0);
+		else if (key == 27) break;
 		imshow("frame", frame);
 		imshow("canny", canny_img);
 #endif
@@ -199,14 +251,25 @@ int main(int argc, char** argv)
 		}
 
 	 	if (contours1.size() < 9) {
+			// 指定面积范围内的轮廓较少，有可能只是漏检测，这里做一些约束
+			if (frameCount == 3 || frameCount == 30)
+				frameCount = 0;
+			if (frameCount < 10 && !distinguishBuff)
+				frameCount += 2;
+			if (frameCount == 10)	// 每次+2，连续5帧后，distinguishBuff = true，开始重新分辨小符和大符
+				distinguishBuff = true;
+			
 			if (findNineRect > 0)
 				findNineRect--;
-			
+
+#ifdef SEND				
 			if (findNineRect == 0)
 				Serialport1.usart3_send(static_cast<uint8_t>(255));
-#ifdef DEBUG			
+#endif
+
+#ifdef DEBUG
 			cout << "contours in specified range are not enough" << endl;
-#endif			
+#endif
 			continue;
 		}
 
@@ -221,7 +284,7 @@ int main(int argc, char** argv)
 			for (size_t j = 0; j < hull.size(); j++)
 				tempContour.push_back(contours1[i][hull[j]]);
 			double tempArea = contourArea(tempContour);
-			if (tempArea < 4500 || tempArea > 7500)	// 面积约束
+			if (tempArea < 4000 || tempArea > 8000)	// 面积约束
 				continue;
 
 			vector<Point> tempContour2;
@@ -290,9 +353,6 @@ int main(int argc, char** argv)
 				contours_rotatedRect[i].points(p.data());
 				sortPoints(p);
 
-				Point2f srcPoints[4];
-				Point2f dstPoints[4];
-
 				srcPoints[0] = p[0] + Point2f(10, 6);		// 左上
 				srcPoints[1] = p[1] + Point2f(-10, 6);		// 右上
 				srcPoints[2] = p[2] + Point2f(-10, -4);		// 右下
@@ -318,58 +378,66 @@ int main(int argc, char** argv)
 				for (int j = 0; j < 4; j++)
 					line(frame, srcPoints[j], srcPoints[(j + 1) % 4], Scalar(204, 122, 0), 2, LINE_AA);
 #endif
-				dstPoints[0] = Point2f(0, 0);
-				dstPoints[1] = Point2f(40, 0);
-				dstPoints[2] = Point2f(40, 40);
-				dstPoints[3] = Point2f(0, 40);
 
-				Mat warpMat(2, 4, CV_32FC1);
+				// 透视变换，将密码区变换成 40*40 的Mat
 				warpMat = getPerspectiveTransform(srcPoints, dstPoints);
-
-				// 透视变换，将密码区变换成40*40的Mat
-				Mat dstImage(40, 40, CV_8UC1, Scalar(0));
 				warpPerspective(gray_img, dstImage, warpMat, dstImage.size());
 
 				if (!getNinxiTubeGrayValue) {
 					Mat matTemp;
-					double thres = threshold(dstImage, matTemp, 0, 255, THRESH_OTSU);
-					if (thres > 40 && thres < 100) {
-						minGrayValue = thres - 25;
+					double thresh = threshold(dstImage, matTemp, 0, 255, THRESH_OTSU);
+					if (thresh > 40 && thresh < 200) {
+						minGrayValue = thresh;
 						getNinxiTubeGrayValue = true;
 					}
+					cout <<  minGrayValue << endl;
 				}
 				
 				// 九宫格内的数字在两次变换之间有短暂时间没有内容（空白）
 				// 这里通过最低灰度值来判断是否存在数字
 				if (min_mat(dstImage) > minGrayValue) {
-					cout << "no number in cells" << endl;
+					cout << " no number in cells" << endl;
 					isEmpty = true;
 					break;
 				}
 
-				threshold(dstImage, nineRect_mat[i], 0, 255, THRESH_OTSU);
-				threshold(nineRect_mat[i], nineRect_mat[i], 50, 255, THRESH_BINARY_INV);
-				dilate(nineRect_mat[i], nineRect_mat[i], element2);		// 膨胀
-				deskew(nineRect_mat[i]);								// 抗扭斜处理
-				Mat matROI_ = nineRect_mat[i].clone();
-				vector<vector<Point> > contours;
-				findContours(matROI_, contours, RETR_CCOMP, CHAIN_APPROX_SIMPLE);
-				if (contours.size() > 1)
-					findAllContour(nineRect_mat[i], contours);
-				Rect rect_ = boundingRect(contours[0]);
-				Mat mattmp = nineRect_mat[i](rect_).clone();
-				resize(mattmp, nineRect_mat[i], Size(40, 40));
-				blur(nineRect_mat[i], nineRect_mat[i], Size(3, 3));
+				threshold(dstImage, dstImage, 0, 255, THRESH_OTSU);
+				threshold(dstImage, dstImage, 50, 255, THRESH_BINARY_INV);
+				dilate(dstImage, dstImage, element2);	// 膨胀
+				if (bigBuff == 1)
+					deskew(dstImage);					// 抗扭斜处理
+				vector<vector<Point> > tempContour;
+				findContours(dstImage, tempContour, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
+				Rect rect;
+				if (tempContour.size() > 1) {
+					double tempArea = 0;
+					for (int j = 0; j < tempContour.size(); j++) {
+						if (tempArea < contourArea(tempContour[j])) {
+							rect = boundingRect(tempContour[j]);
+							tempArea = contourArea(tempContour[j]);
+						}
+					}
+				}
+				else if (tempContour.size() == 1) {
+					rect = boundingRect(tempContour[0]);
+				}
+				else {
+					isEmpty = true;
+					break;
+				}
+				drawContours(dstImage, tempContour, -1, Scalar(255), -1);
+				resize(dstImage(rect), nineRect_mat[i], Size(40, 40));
+				if (bigBuff == 1)
+					blur(nineRect_mat[i], nineRect_mat[i], Size(3, 3));
 			}
 		}
 		else {
 			if (findNineRect > 0)
 				findNineRect--;
-			
+
+#ifdef SEND				
 			if (findNineRect == 0)
 				Serialport1.usart3_send(static_cast<uint8_t>(255));
-#ifdef DEBUG			
-			waitKey(1);
 #endif
 			continue;
 		}
@@ -378,6 +446,70 @@ int main(int argc, char** argv)
 //NEXT:
 		if (isEmpty)
 			continue;
+		
+		for (int i = 0; i < 9; i++) {
+			hog2->compute(nineRect_mat[i], descriptors2);
+			Mat matROIFlattenedFloat(1, (int)(descriptors2.size()), CV_32FC1, descriptors2.data());
+			Mat matCurrentChar(0, 0, CV_32F);
+			Mat m1(0, 0, CV_32F);
+			Mat m2(0, 0, CV_32F);
+			kNearest2->findNearest(matROIFlattenedFloat, 1, matCurrentChar, m1, m2);
+			nineNumber[i] = (int)matCurrentChar.at<float>(0, 0);	// 保存九宫格区的九个数字
+			neighborDistance[i] = m2.at<float>(0, 0);
+		}
+
+		// 是否需要区分小符和大符
+		if (distinguishBuff) {
+			int distanceCount = 0;
+			for (int i = 0; i < 9; i++) {
+				if (neighborDistance[i] < 6)
+					distanceCount--;
+				else if (neighborDistance[i] > 10)
+					distanceCount++;
+			}
+
+			if (distanceCount < -4) {
+				bigBuff = 0;
+				frameCount++;
+			}
+			else if (distanceCount > 4) {
+				bigBuff = 1;
+				frameCount += 10;
+			}
+			else {
+				bigBuff = -1;
+				frameCount = 0;
+#ifdef DEBUG					
+				imshow("frame", frame);
+#endif	
+				continue;
+			}
+
+			if (frameCount == 3 || frameCount == 30)
+				distinguishBuff = false;
+			else
+				continue;
+		}
+
+		// 检测到小符之后发送信号
+		if (!distinguishBuff && bigBuff == 0) {
+			for (int i = 0; i < 9; i++) {
+				if (nineNumber[i]) {
+#ifdef DEBUG		
+					cout << "target --> " << i + 1 << endl;
+					circle(frame, contours_rotatedRect[i].center, 5, Scalar(0, 0, 255), 2, LINE_AA);
+#endif
+#ifdef SEND
+					Serialport1.usart3_send(static_cast<uint8_t>(i + 1));
+#endif					
+					break;
+				}
+			}
+#ifdef DEBUG			
+			imshow("frame", frame);
+#endif			
+			continue;
+		}
 
 		/************************************************************************/
 		/*                         kNN识别九宫格区数字                          */
@@ -404,7 +536,7 @@ int main(int argc, char** argv)
 					errorCount++;
 					errorPair.push_back(i);
 					errorPair.push_back(j);
-#ifdef DEBUG					
+#ifndef DEBUG					
 					cout << i + 1 << " " << nineNumber[i] << " " << neighborDistance[i] << endl;
 					cout << j + 1 << " " << nineNumber[j] << " " << neighborDistance[j] << endl;
 #endif
@@ -560,9 +692,8 @@ int main(int argc, char** argv)
 			sortRect(ninxiTubeNumbRect);
 		}
 		else {
-#ifdef DEBUG			
+#ifndef DEBUG			
 			cout << "ninxiTube ERROR, ninxiTubeNumbRect.size() = " << ninxiTubeNumbRect.size() << endl;
-			waitKey(1);
 #endif
 			continue;
 		}
@@ -605,10 +736,12 @@ int main(int argc, char** argv)
 			for (int i = 0; i < 9; i++) {
 				if (password[currentNumberCount] == nineNumber[i]) {
 #ifdef DEBUG
-					circle(frame, contours_rotatedRect[i].center, 3, Scalar(0,0,255), -1);
+					circle(frame, contours_rotatedRect[i].center, 5, Scalar(0, 0, 255), 2, LINE_AA);
 					cout << "targetNum : " << currentNumberCount + 1 << "-->" << i + 1 << endl;
 #endif
-					Serialport1.usart3_send(static_cast<uint8_t>(i + 1));					
+#ifdef SEND	
+					Serialport1.usart3_send(static_cast<uint8_t>(i + 1));
+#endif					
 					if (currentNumberCount < 4)
 						currentNumberCount++;
 					break;
@@ -637,11 +770,11 @@ int main(int argc, char** argv)
 			cout << nineNumber[i];
 		cout << endl << endl;
 
-		int key = waitKey(1);
+/*		key = (waitKey(1) & 255);
 		if (key == 32)
 			waitKey(0);
 		else if (key == 27)
-			break;
+			break;*/
 #endif
 	}
 
