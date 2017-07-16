@@ -3,7 +3,7 @@
 #include "functions.h"
 #include "serialsom.h"
 
-//#define SEND				// 如需要串口发送，取消注释
+#define SEND				// 如需要串口发送，取消注释
 #define DEBUG
 
 const int Width = 800;		// 视频宽
@@ -90,16 +90,16 @@ int main(int argc, char** argv)
 		fs2.release();
 	}
 	
-	cap.open("output3.avi");
+	//cap.open("output3.avi");
 	// 打开摄像头
-/* 	cap.open(0);
+ 	cap.open(0);
 	while (!cap.isOpened()) {
 		sleep(1);
 		cap.open(0);
 	}
 	cap.set(CAP_PROP_FRAME_WIDTH, Width);
  	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
-*/
+
 	// 开启读取视频帧的线程
 /*	pthread_t id;
 	int ret = pthread_create(&id, NULL, capFrameThread, NULL);
@@ -376,7 +376,7 @@ int main(int argc, char** argv)
 					foundNixieTubeArea = true;
 #ifdef DEBUG
 				for (int j = 0; j < 4; j++)
-					line(frame, srcPoints[j], srcPoints[(j + 1) % 4], Scalar(204, 122, 0), 2, LINE_AA);
+					frame, srcPoints[j], srcPoints[(j + 1) % 4], Scalar(204, 122, 0), 2, LINE_AA);
 #endif
 
 				// 透视变换，将密码区变换成 40*40 的Mat
@@ -669,8 +669,10 @@ int main(int argc, char** argv)
 		if (!foundNixieTubeArea)
 			continue;
 
+		pw_gray = gray_img(passwordRect).clone();
+		ninxiTubeGrayValue = calcNixietubeThreshold(pw_gray);
+		
 		// 由数码管区的 passwordRect 得到相应的ROI，并做一些预处理
-		pw_gray = gray_img(passwordRect);
 		threshold(pw_gray, pw_bin, ninxiTubeGrayValue, 255, THRESH_BINARY);
 		erode(pw_bin, pw_bin, element2);		// 腐蚀
 		dilate(pw_bin, pw_bin, element1);		// 膨胀

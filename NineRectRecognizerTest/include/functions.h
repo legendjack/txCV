@@ -244,4 +244,46 @@ void findAllContour(Mat src, vector<vector<Point> > & contours) {
 	contours.push_back(points_);
 }
 
+
+// 计算数码管的分割阈值
+int calcNixietubeThreshold(Mat m) {
+	int thresholdLevel[11] = { 0,0,0,0,0,0,0,0,0,0,0 };
+	int k = m.cols * m.rows;
+	for (int i = 0; i < k; i++)
+	{
+		if (m.data[i] > 225)
+			thresholdLevel[0]++;
+		else if (m.data[i] > 210 && (m.data[i] < 235))
+			thresholdLevel[1]++;
+		else if (m.data[i] > 195 && (m.data[i] < 220))
+			thresholdLevel[2]++;
+		else if (m.data[i] > 180 && (m.data[i] < 205))
+			thresholdLevel[3]++;
+		else if (m.data[i] > 165 && (m.data[i] < 190))
+			thresholdLevel[4]++;
+		else if (m.data[i] > 150 && (m.data[i] < 175))
+			thresholdLevel[5]++;
+		else if (m.data[i] > 135 && (m.data[i] < 160))
+			thresholdLevel[6]++;
+// 		else if (m.data[i] > 175)
+// 			thresholdLevel[7]++;
+// 		else if (m.data[i] > 165)
+// 			thresholdLevel[8]++;
+// 		else if (m.data[i] > 155)
+// 			thresholdLevel[9]++;
+// 		else if (m.data[i] > 145)
+// 			thresholdLevel[10]++;
+	}
+
+	int x = 0, z = 0;
+	for (int i = 0; i < 10; i++) {
+		if (thresholdLevel[i] > x) {
+			x = thresholdLevel[i];
+			z = i;
+		}
+	}
+
+	return (210 - 15 * z);
+}
+
 #endif

@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<opencv_storage>
+
+  <!-- 检测的颜色：0-红色，1-蓝色 -->
+  <detectColor>1</detectColor>
+  
+  <!-- 是否录像，0-不录，1-录像 -->
+  <recordVideo>0</recordVideo>
+  
+  <!-- 相机分辨率 -->
+  <Width>640</Width>
+  <Height>480</Height>
+
+</opencv_storage>

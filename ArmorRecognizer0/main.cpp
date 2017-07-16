@@ -96,8 +96,8 @@ int main()
 	setMouseCallback(WINNAME, on_Mouse);		// 鼠标响应函数获取targetPoint
 #endif
 
-	VideoCapture cap("1.avi");
-	/*cap.open(0);
+	//VideoCapture cap("1.avi");
+	cap.open(0);
 	while (!cap.isOpened()) {
 		sleep(1);
 		cap.open(0);
@@ -105,7 +105,7 @@ int main()
 	//cap.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));	// 需要在设置宽高之前设置，否则无效
 	//cap.set(CV_CAP_PROP_SATURATION, 80);
 	cap.set(CAP_PROP_FRAME_WIDTH, Width);
-	cap.set(CAP_PROP_FRAME_HEIGHT, Height);*/
+	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
 
 	// 开启读取视频帧的线程（貌似程序在有些计算机上运行会因此崩溃）
 /*	pthread_t id;
