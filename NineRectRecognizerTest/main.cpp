@@ -376,7 +376,7 @@ int main(int argc, char** argv)
 					foundNixieTubeArea = true;
 #ifdef DEBUG
 				for (int j = 0; j < 4; j++)
-					frame, srcPoints[j], srcPoints[(j + 1) % 4], Scalar(204, 122, 0), 2, LINE_AA);
+					line(frame, srcPoints[j], srcPoints[(j + 1) % 4], Scalar(204, 122, 0), 2, LINE_AA);
 #endif
 
 				// 透视变换，将密码区变换成 40*40 的Mat
