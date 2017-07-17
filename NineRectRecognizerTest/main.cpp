@@ -3,7 +3,7 @@
 #include "functions.h"
 #include "serialsom.h"
 
-#define SEND				// 如需要串口发送，取消注释
+//#define SEND				// 如需要串口发送，取消注释
 #define DEBUG
 
 const int Width = 800;		// 视频宽
@@ -90,16 +90,16 @@ int main(int argc, char** argv)
 		fs2.release();
 	}
 	
-	//cap.open("output3.avi");
+	cap.open(filename);
 	// 打开摄像头
- 	cap.open(0);
+/* 	cap.open(0);
 	while (!cap.isOpened()) {
 		sleep(1);
 		cap.open(0);
 	}
 	cap.set(CAP_PROP_FRAME_WIDTH, Width);
  	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
-
+*/
 	// 开启读取视频帧的线程
 /*	pthread_t id;
 	int ret = pthread_create(&id, NULL, capFrameThread, NULL);
@@ -233,8 +233,6 @@ int main(int argc, char** argv)
 		key = (waitKey(10) & 255);
 		if (key == 32) waitKey(0);
 		else if (key == 27) break;
-		imshow("frame", frame);
-		imshow("canny", canny_img);
 #endif
 
 		// 寻找所有轮廓
@@ -536,9 +534,9 @@ int main(int argc, char** argv)
 					errorCount++;
 					errorPair.push_back(i);
 					errorPair.push_back(j);
-#ifndef DEBUG					
-					cout << i + 1 << " " << nineNumber[i] << " " << neighborDistance[i] << endl;
-					cout << j + 1 << " " << nineNumber[j] << " " << neighborDistance[j] << endl;
+#ifdef DEBUG					
+					//cout << i + 1 << " " << nineNumber[i] << " " << neighborDistance[i] << endl;
+					//cout << j + 1 << " " << nineNumber[j] << " " << neighborDistance[j] << endl;
 #endif
 				}
 			}
@@ -665,18 +663,25 @@ int main(int argc, char** argv)
 				nineRect_mat[j + i * 3].copyTo(nineNumberMat(Rect(j * 40, i * 40, 40, 40)));
 		imshow("nineNumberMat", nineNumberMat);
 #endif
-
-		if (!foundNixieTubeArea)
-			continue;
-
-		pw_gray = gray_img(passwordRect).clone();
-		ninxiTubeGrayValue = calcNixietubeThreshold(pw_gray);
 		
+		//if (!foundNixieTubeArea)
+		//	continue;
+
 		// 由数码管区的 passwordRect 得到相应的ROI，并做一些预处理
+		pw_gray = gray_img(passwordRect);
 		threshold(pw_gray, pw_bin, ninxiTubeGrayValue, 255, THRESH_BINARY);
 		erode(pw_bin, pw_bin, element2);		// 腐蚀
 		dilate(pw_bin, pw_bin, element1);		// 膨胀
 		connectClosedPoint(pw_bin);
+
+#ifdef DEBUG
+		imshow("frame", frame);
+		imshow("password", pw_bin);
+		key = (waitKey(1) & 255);
+		if (!foundNixieTubeArea) {
+			continue;
+		}
+#endif
 
 		Mat pw_bin_ = pw_bin.clone();
 		vector<vector<Point> > ninxiTubeAreaContour;
@@ -694,7 +699,7 @@ int main(int argc, char** argv)
 			sortRect(ninxiTubeNumbRect);
 		}
 		else {
-#ifndef DEBUG			
+#ifdef DEBUG			
 			cout << "ninxiTube ERROR, ninxiTubeNumbRect.size() = " << ninxiTubeNumbRect.size() << endl;
 #endif
 			continue;
