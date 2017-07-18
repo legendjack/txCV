@@ -388,7 +388,7 @@ int main(int argc, char** argv)
 						minGrayValue = thresh;
 						getNinxiTubeGrayValue = true;
 					}
-					cout <<  minGrayValue << endl;
+					//cout <<  minGrayValue << endl;
 				}
 				
 				// 九宫格内的数字在两次变换之间有短暂时间没有内容（空白）
@@ -441,7 +441,6 @@ int main(int argc, char** argv)
 		}
 
 		// 如果第一个宫格中没有数字，则跳过该帧
-//NEXT:
 		if (isEmpty)
 			continue;
 		
@@ -666,9 +665,13 @@ int main(int argc, char** argv)
 		
 		//if (!foundNixieTubeArea)
 		//	continue;
+	
+		pw_gray = gray_img(passwordRect).clone();
+		ninxiTubeGrayValue = calcNixietubeThreshold(pw_gray);
+
+		cout << "Nixietube Threshold = " << ninxiTubeGrayValue << endl;
 
 		// 由数码管区的 passwordRect 得到相应的ROI，并做一些预处理
-		pw_gray = gray_img(passwordRect);
 		threshold(pw_gray, pw_bin, ninxiTubeGrayValue, 255, THRESH_BINARY);
 		erode(pw_bin, pw_bin, element2);		// 腐蚀
 		dilate(pw_bin, pw_bin, element1);		// 膨胀

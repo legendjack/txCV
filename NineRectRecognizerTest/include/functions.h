@@ -244,7 +244,6 @@ void findAllContour(Mat src, vector<vector<Point> > & contours) {
 	contours.push_back(points_);
 }
 
-
 // 计算数码管的分割阈值
 int calcNixietubeThreshold(Mat m) {
 	int thresholdLevel[11] = { 0,0,0,0,0,0,0,0,0,0,0 };
