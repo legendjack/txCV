@@ -18,6 +18,7 @@ VideoCapture cap;
 VideoWriter writer;
 Mat frame, gray_img, canny_img;
 Mat element0, element1, element2;
+Mat bMat, gMat, rMat;
 
 Point2f srcPoints[4];		// 透视变换 srcPoints
 Point2f dstPoints[4];		// 透视变换 dstPoints
@@ -112,6 +113,11 @@ int main(int argc, char** argv)
 	element0 = getStructuringElement(MORPH_ELLIPSE, Size(3, 3));
 	element1 = getStructuringElement(MORPH_ELLIPSE, Size(5, 5));
 	element2 = getStructuringElement(MORPH_ELLIPSE, Size(2, 2));
+
+	bMat.create(Size(Width, Height), CV_8UC1);
+	gMat.create(Size(Width, Height), CV_8UC1);
+	rMat.create(Size(Width, Height), CV_8UC1);
+	Mat chan[3] = { bMat, gMat, rMat };
 	
 	dstPoints[0] = Point2f(0, 0);
 	dstPoints[1] = Point2f(40, 0);
@@ -228,6 +234,9 @@ int main(int argc, char** argv)
 		cvtColor(frame, gray_img, COLOR_BGR2GRAY);
 		Canny(gray_img, canny_img, t1, t2);
 		dilate(canny_img, canny_img, element2);	// 膨胀
+
+		if (bigBuff)
+			split(frame, chan);
 		
 #ifdef DEBUG
 		key = (waitKey(10) & 255);
@@ -666,10 +675,8 @@ int main(int argc, char** argv)
 		//if (!foundNixieTubeArea)
 		//	continue;
 	
-		pw_gray = gray_img(passwordRect).clone();
+		pw_gray = rMat(passwordRect).clone();
 		ninxiTubeGrayValue = calcNixietubeThreshold(pw_gray);
-
-		cout << "Nixietube Threshold = " << ninxiTubeGrayValue << endl;
 
 		// 由数码管区的 passwordRect 得到相应的ROI，并做一些预处理
 		threshold(pw_gray, pw_bin, ninxiTubeGrayValue, 255, THRESH_BINARY);
@@ -694,7 +701,7 @@ int main(int argc, char** argv)
 		for (size_t i = 0; i < ninxiTubeAreaContour.size(); i++) {
 			Rect tmpRect = boundingRect(ninxiTubeAreaContour[i]);
 			int tmpHeight = MAX(tmpRect.width, tmpRect.height);
-			if (tmpHeight > 20)
+			if (tmpHeight > 22)
 				ninxiTubeNumbRect.push_back(tmpRect);
 		}
 
@@ -702,7 +709,8 @@ int main(int argc, char** argv)
 			sortRect(ninxiTubeNumbRect);
 		}
 		else {
-#ifdef DEBUG			
+#ifdef DEBUG
+			cout << "Nixietube Threshold = " << ninxiTubeGrayValue << endl;
 			cout << "ninxiTube ERROR, ninxiTubeNumbRect.size() = " << ninxiTubeNumbRect.size() << endl;
 #endif
 			continue;
