@@ -3,7 +3,7 @@
 #include "functions.h"
 #include "serialsom.h"
 
-//#define SEND				// 如需要串口发送，取消注释
+#define SEND				// 如需要串口发送，取消注释
 #define DEBUG
 
 const int Width = 800;		// 视频宽
@@ -91,16 +91,16 @@ int main(int argc, char** argv)
 		fs2.release();
 	}
 	
-	cap.open(filename);
+	//cap.open(filename);
 	// 打开摄像头
-/* 	cap.open(0);
+ 	cap.open(0);
 	while (!cap.isOpened()) {
 		sleep(1);
 		cap.open(0);
 	}
 	cap.set(CAP_PROP_FRAME_WIDTH, Width);
  	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
-*/
+
 	// 开启读取视频帧的线程
 /*	pthread_t id;
 	int ret = pthread_create(&id, NULL, capFrameThread, NULL);
@@ -439,6 +439,9 @@ int main(int argc, char** argv)
 			}
 		}
 		else {
+#ifdef DEBUG
+			imshow("frame", frame);
+#endif
 			if (findNineRect > 0)
 				findNineRect--;
 
