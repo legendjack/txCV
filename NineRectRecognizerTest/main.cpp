@@ -271,7 +271,7 @@ int main(int argc, char** argv)
 
 #ifdef SEND				
 			if (findNineRect == 0)
-				Serialport1.usart3_send(static_cast<uint8_t>(255));
+				Serialport1.usart3_send(static_cast<uint8_t>(255), static_cast<uint8_t>(0));
 #endif
 
 #ifdef DEBUG
@@ -447,7 +447,7 @@ int main(int argc, char** argv)
 
 #ifdef SEND				
 			if (findNineRect == 0)
-				Serialport1.usart3_send(static_cast<uint8_t>(255));
+				Serialport1.usart3_send(static_cast<uint8_t>(255), static_cast<uint8_t>(0));
 #endif
 			continue;
 		}
@@ -509,7 +509,7 @@ int main(int argc, char** argv)
 					circle(frame, contours_rotatedRect[i].center, 5, Scalar(0, 0, 255), 2, LINE_AA);
 #endif
 #ifdef SEND
-					Serialport1.usart3_send(static_cast<uint8_t>(i + 1));
+					Serialport1.usart3_send(static_cast<uint8_t>(i + 1), static_cast<uint8_t>(i + 1));
 #endif					
 					break;
 				}
@@ -761,8 +761,8 @@ int main(int argc, char** argv)
 					cout << "targetNum : " << currentNumberCount + 1 << "-->" << i + 1 << endl;
 #endif
 #ifdef SEND	
-					Serialport1.usart3_send(static_cast<uint8_t>(i + 1));
-#endif					
+					Serialport1.usart3_send(static_cast<uint8_t>(i + 1), static_cast<uint8_t>(currentNumberCount + 1));
+#endif
 					if (currentNumberCount < 4)
 						currentNumberCount++;
 					break;

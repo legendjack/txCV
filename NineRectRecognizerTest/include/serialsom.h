@@ -30,9 +30,9 @@ public:
         bool UART0_Send(uint8_t *str);
         bool UART0_Twist_Sent(short liner_x,short liner_y,short angular_z);
         int UART0_Recv(char *rcv_buf,int data_len);
-        int UART0_Recv_Odm( int16_t *odm_buf);
-        bool  UART0_INIT(void);
-        bool usart3_send(uint8_t picth);
+        int UART0_Recv_Odm(int16_t *odm_buf);
+        bool UART0_INIT(void);
+        bool usart3_send(uint8_t picth, uint8_t yaw);
 private:
          int fd ;
 
@@ -179,8 +179,8 @@ int Serialport::set_opt(int nSpeed , int nBits, char nEvent , int nStop )
 
 bool Serialport::UART0_Send(uint8_t *str)
 {
-    buffer  = str;
-    if(write(fd, buffer ,2)<0)
+    buffer = str;
+    if(write(fd, buffer, 4)<0)
     {
         perror("write error");
         return false;
@@ -272,12 +272,14 @@ int Serialport::UART0_Recv_Odm( int16_t *odm_buf)
 }
 
 
-bool Serialport::usart3_send(uint8_t picth)
+bool Serialport::usart3_send(uint8_t picth, uint8_t yaw)
 {
   int a;
-  uint8_t data_temp[2];
+  uint8_t data_temp[4];
   data_temp[0] = 0xaa;
   data_temp[1] = picth;
+  data_temp[0] = 0xab;
+  data_temp[1] = yaw;
 
   a = UART0_Send(data_temp);
   return a;
