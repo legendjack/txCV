@@ -54,11 +54,11 @@ int main(int argc, char** argv)
 
 #ifdef SEND	
 	// ³õÊ¼»¯´®¿Ú
-	Serialport Serialport1("/dev/ttyTHS0");
-	int fd = Serialport1.open_port("/dev/ttyTHS0");
+	Serialport Serialport1("/dev/ttyTHS2");
+	int fd = Serialport1.open_port("/dev/ttyTHS2");
 	while (fd < 0) {
 		sleep(1);
-		fd = Serialport1.open_port("/dev/ttyTHS0");
+		fd = Serialport1.open_port("/dev/ttyTHS2");
 	}
 	Serialport1.set_opt(115200, 8, 'N', 1);
 #endif
@@ -276,6 +276,7 @@ int main(int argc, char** argv)
 
 #ifdef DEBUG
 			cout << "contours in specified range are not enough" << endl;
+			imshow("frame", frame);
 #endif
 			continue;
 		}
@@ -761,7 +762,7 @@ int main(int argc, char** argv)
 					cout << "targetNum : " << currentNumberCount + 1 << "-->" << i + 1 << endl;
 #endif
 #ifdef SEND	
-					Serialport1.usart3_send(static_cast<uint8_t>(i + 1), static_cast<uint8_t>(currentNumberCount + 1));
+					Serialport1.usart3_send(static_cast<uint8_t>(i + 1), static_cast<uint8_t>(password[currentNumberCount]));
 #endif
 					if (currentNumberCount < 4)
 						currentNumberCount++;

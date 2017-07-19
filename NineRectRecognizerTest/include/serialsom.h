@@ -278,8 +278,8 @@ bool Serialport::usart3_send(uint8_t picth, uint8_t yaw)
   uint8_t data_temp[4];
   data_temp[0] = 0xaa;
   data_temp[1] = picth;
-  data_temp[0] = 0xab;
-  data_temp[1] = yaw;
+  data_temp[2] = 0xab;
+  data_temp[3] = yaw;
 
   a = UART0_Send(data_temp);
   return a;
