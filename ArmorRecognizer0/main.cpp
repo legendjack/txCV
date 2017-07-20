@@ -11,11 +11,11 @@
 #define WINNAME	"Armor Recognition"
 #define WINNAME1 "Binary Image"
 #define MaxContourArea 450		// 面积大于该值的轮廓不是装甲的灯条
-#define MinContourArea 15		// 面积小于该值的轮廓不是装甲的灯条
-#define Width	640				// 视频宽
-#define Height	480				// 视频高
-#define DEBUG
-//#define SEND
+#define MinContourArea 25		// 面积小于该值的轮廓不是装甲的灯条
+#define Width	800				// 视频宽
+#define Height	600				// 视频高
+//#define DEBUG
+#define SEND
 
 // 全局变量
 VideoCapture cap;
@@ -33,7 +33,7 @@ float tmpAngle1;
 uint8_t yawOut = 250;			// 发送的 yaw 值
 uint8_t pitchOut = 250;			// 发送的 pitch 值
 uint8_t shot = 0;				// 是否射击
-int frameCount = 150;
+int frameCount = 450;
 int frameCount1 = 0;
 int lightsCount = 0;			// 图像中装甲灯条的数量
 bool findArmor;					// 是否检测到装甲
@@ -167,15 +167,19 @@ int main()
 				contoursInAreaRange.push_back(contours[i]);
 		}
 
-		// 如果面积在指定范围内的轮廓数量小于2，则进入下一次循环（注意这种情况比较少）
+		// 如果面积在指定范围内的轮廓数量小于2，则进入下一次循环（注意这种情况非常少）
 		if (contoursInAreaRange.size() < 2) {
 			frameCount++;
 			if (frameCount > 9)
 				useSW = false;
-            if (frameCount >= 60) {
-				frameCount--;
+            if (frameCount >= 60 && frameCount < 450) {
 				yawOut = 250;
 				pitchOut = 250;
+				shot = 0;
+			} else if (frameCount >= 450) {
+				frameCount--;
+				yawOut = 253;
+				pitchOut = 253;
 				shot = 0;
 			}
 			goto HERE;
@@ -223,11 +227,16 @@ int main()
             if (frameCount <= 60) {
 				pitchOut = 100;
 				yawOut = 100;
-            } else {
+				shot = 0;
+            } else if (frameCount < 450) {
 				// 如果连续60帧没有检测到装甲，则认定为没有目标，串口发送信息进入搜索模式
-                frameCount--;
                 pitchOut = 250;
 				yawOut = 250;
+				shot = 0;
+			} else if (frameCount >= 450) {
+				frameCount--;
+				pitchOut = 253;
+				yawOut = 253;
 				shot = 0;
 			}
 			goto HERE;
@@ -256,7 +265,7 @@ int main()
 					continue;
 				if ((angleDifference < 10 || angleDifference > 170) &&
 					(angleDifference < tmpAngle0 || angleDifference > tmpAngle1) &&
-					yDifference < 15) {
+					yDifference < 10) {
 #ifdef DEBUG
 					circle(frame_, rotatedRectsOfLights[i].center, 3, Scalar(0, 0, 255), -1, LINE_AA);
 					circle(frame_, rotatedRectsOfLights[j].center, 3, Scalar(0, 0, 255), -1, LINE_AA);
@@ -280,9 +289,7 @@ int main()
 						swSizeCacheSum += swSizeCache[k];
 
 					searchWindow.setCenter(centerOfArmor.x, centerOfArmor.y);
-					searchWindow.setSize(swSizeCacheSum / 5 * 15, rotatedRectHeight * 4);
-					
-					// areaOfLightContour = rotatedRectHeight * rotatedRectHeight;
+					searchWindow.setSize(swSizeCacheSum / 5 * 15, rotatedRectHeight * 15);
 				}
 			}
 		}
