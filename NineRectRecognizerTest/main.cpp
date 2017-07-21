@@ -3,7 +3,7 @@
 #include "functions.h"
 #include "serialsom.h"
 
-#define SEND				// 如需要串口发送，取消注释
+#define SEND				// 如需要串口发送，取消注释，使用妙算的 UART3 发送数据
 #define DEBUG
 
 const int Width = 800;		// 视频宽
@@ -270,8 +270,8 @@ int main(int argc, char** argv)
 				findNineRect--;
 
 #ifdef SEND				
-			//if (findNineRect == 0)
-			//	Serialport1.usart3_send(static_cast<uint8_t>(255), static_cast<uint8_t>(0));
+			if (findNineRect == 0)
+				Serialport1.usart3_send(static_cast<uint8_t>(255), static_cast<uint8_t>(255));
 #endif
 
 #ifdef DEBUG
@@ -447,8 +447,8 @@ int main(int argc, char** argv)
 				findNineRect--;
 
 #ifdef SEND				
-			//if (findNineRect == 0)
-			//	Serialport1.usart3_send(static_cast<uint8_t>(255), static_cast<uint8_t>(0));
+			if (findNineRect == 0)
+				Serialport1.usart3_send(static_cast<uint8_t>(255), static_cast<uint8_t>(255));
 #endif
 			continue;
 		}
@@ -510,7 +510,7 @@ int main(int argc, char** argv)
 					circle(frame, contours_rotatedRect[i].center, 5, Scalar(0, 0, 255), 2, LINE_AA);
 #endif
 #ifdef SEND
-					Serialport1.usart3_send(static_cast<uint8_t>(i + 1), static_cast<uint8_t>(0));
+					Serialport1.usart3_send(static_cast<uint8_t>(i + 1), static_cast<uint8_t>(10));
 #endif					
 					break;
 				}
@@ -762,7 +762,7 @@ int main(int argc, char** argv)
 					cout << "targetNum : " << currentNumberCount + 1 << "-->" << i + 1 << endl;
 #endif
 #ifdef SEND	
-					Serialport1.usart3_send(static_cast<uint8_t>(i + 1), static_cast<uint8_t>(1));
+					Serialport1.usart3_send(static_cast<uint8_t>(i + 1), static_cast<uint8_t>(20));
 #endif
 					if (currentNumberCount < 4)
 						currentNumberCount++;

@@ -52,7 +52,7 @@ void* capFrameThread(void *arg);
 int main()
 {
 	sleep(1);
-	
+
 #ifdef SEND
 	// 初始化串口类
 	Serialport Serialport1("/dev/ttyUSB0");
