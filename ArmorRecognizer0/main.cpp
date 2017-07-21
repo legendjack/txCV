@@ -1,4 +1,5 @@
 //#include <pthread.h>
+#include <sstream>
 #include <stdio.h>
 #include <iostream>
 #include <opencv2/opencv.hpp>
@@ -19,6 +20,7 @@
 
 // 全局变量
 VideoCapture cap;
+VideoWriter writer;
 map<string, string> config;
 Mat frame, gray;				// 视频帧及其灰度图
 Mat binaryImage, hsvImage;		// 二值图及HSV图，使用cvtColor得到
@@ -34,8 +36,6 @@ uint8_t yawOut = 250;			// 发送的 yaw 值
 uint8_t pitchOut = 250;			// 发送的 pitch 值
 uint8_t shot = 0;				// 是否射击
 int frameCount = 450;
-int frameCount1 = 0;
-int lightsCount = 0;			// 图像中装甲灯条的数量
 bool findArmor;					// 是否检测到装甲
 Point targetPoint(370, 340);
 Point centerOfArmor;
@@ -43,6 +43,8 @@ float areaOfLightContour = 0;	// 某个灯条的面积，用于大致表示目标装甲的远近。
 SearchWindow searchWindow(Width, Height);		// 搜索窗口
 bool useSW = false;				// 是否使用搜索窗口
 int swSizeCache[5] = { 0,0,0,0,0 }; // 缓存 5 帧搜索窗口的尺寸（宽）
+int recordVideo = 0;			// 是否录像
+int videoName;					// 录像文件名
 
 Mat bMat, gMat, rMat;			// BGR单通道图
 
@@ -79,6 +81,7 @@ int main()
 	m_threshold = atoi(config["THRESHOLD"].c_str());
 	detectColor = atoi(config["DETECTCOLOR"].c_str());
 	fileName = config["FILENAME"].c_str();
+	recordVideo = atoi(config["RECORDVIDEO"].c_str());
 
 	element = getStructuringElement(MORPH_ELLIPSE, Size(2, 2));
 	element1 = getStructuringElement(MORPH_ELLIPSE, Size(5, 5));
@@ -106,6 +109,21 @@ int main()
 	//cap.set(CV_CAP_PROP_SATURATION, 80);
 	cap.set(CAP_PROP_FRAME_WIDTH, Width);
 	cap.set(CAP_PROP_FRAME_HEIGHT, Height);
+	
+	if (recordVideo) {
+		FileStorage fs1("record.xml", FileStorage::READ);
+		fs1["videoName"] >> videoName;
+		fs1.release();
+		stringstream ss;
+		ss << videoName;
+		string s = ss.str();
+		int fourcc = CV_FOURCC('M', 'J', 'P', 'G');
+		writer.open(s + ".avi", fourcc, 25.0, Size(Width, Height));
+		videoName++;
+		FileStorage fs2("record.xml", FileStorage::WRITE);
+		fs2 << "videoName" << videoName;
+		fs2.release();
+	}
 
 	// 开启读取视频帧的线程（貌似程序在有些计算机上运行会因此崩溃）
 /*	pthread_t id;
@@ -131,6 +149,9 @@ int main()
 			continue;
 #endif
 		}
+		
+		if (recordVideo)
+			writer.write(frame);
 
 		// 如果当前帧使用搜索窗口，则仅保留目标区域图像，其他区域改为黑色
 		if (useSW) {
@@ -170,16 +191,18 @@ int main()
 		// 如果面积在指定范围内的轮廓数量小于2，则进入下一次循环（注意这种情况非常少）
 		if (contoursInAreaRange.size() < 2) {
 			frameCount++;
+			
 			if (frameCount > 9)
 				useSW = false;
-            if (frameCount >= 60 && frameCount < 450) {
+			
+			if (frameCount < 60) {
+				yawOut = 100;
+				pitchOut = 100;
+				shot = 0;
+			} else if (frameCount >= 60) {
+				frameCount--;
 				yawOut = 250;
 				pitchOut = 250;
-				shot = 0;
-			} else if (frameCount >= 450) {
-				frameCount--;
-				yawOut = 253;
-				pitchOut = 253;
 				shot = 0;
 			}
 			goto HERE;
@@ -228,15 +251,11 @@ int main()
 				pitchOut = 100;
 				yawOut = 100;
 				shot = 0;
-            } else if (frameCount < 450) {
+            } else if (frameCount > 60) {
 				// 如果连续60帧没有检测到装甲，则认定为没有目标，串口发送信息进入搜索模式
+				frameCount--;
                 pitchOut = 250;
 				yawOut = 250;
-				shot = 0;
-			} else if (frameCount >= 450) {
-				frameCount--;
-				pitchOut = 253;
-				yawOut = 253;
 				shot = 0;
 			}
 			goto HERE;
@@ -289,7 +308,7 @@ int main()
 						swSizeCacheSum += swSizeCache[k];
 
 					searchWindow.setCenter(centerOfArmor.x, centerOfArmor.y);
-					searchWindow.setSize(swSizeCacheSum / 5 * 15, rotatedRectHeight * 15);
+					searchWindow.setSize(swSizeCacheSum / 5 * 25, rotatedRectHeight * 15);
 				}
 			}
 		}
@@ -331,11 +350,22 @@ int main()
 				useSW = false;
 			
 			if (frameCount > 10) {
+				int disX, disY;
 				
 				// 如果没有检测到装甲，且画面中灯条的数量大于2,则向窗口发送灯条的位置信息
-				int disX = rotatedRectsOfLights[0].center.x - targetPoint.x;
-				int disY = rotatedRectsOfLights[0].center.y - targetPoint.y;
-
+				float minAngle = 200.;
+				for (int i = 0; i < rotatedRectsOfLights.size(); i++)  {
+					float angleTemp = rotatedRectsOfLights[i].angle;
+					if (angleTemp  > 155)
+						angleTemp = 180 - angleTemp;
+					
+					if (angleTemp < minAngle) {
+						disX = rotatedRectsOfLights[i].center.x - targetPoint.x;
+						disY = rotatedRectsOfLights[i].center.y - targetPoint.y;
+						minAngle = angleTemp;
+					}
+				}
+				
 				disX = -disX;
 				disX += 100;
 				if (disX > 200)
@@ -351,7 +381,7 @@ int main()
 
 				yawOut = static_cast<uint8_t>(disX);
 				pitchOut = static_cast<uint8_t>(disY);
-				shot = 0;		
+				shot = 0;
 			}
 		}
 
@@ -359,6 +389,8 @@ HERE:
 
 #ifdef SEND
 		Serialport1.usart3_send(pitchOut, yawOut, shot);
+#else
+		continue;
 #endif
 		//time0 = ((double)getTickCount() - time0) / getTickFrequency();
 		//cout << "time : " << time0 * 1000 << "ms"  << endl;
