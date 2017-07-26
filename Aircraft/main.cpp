@@ -52,7 +52,7 @@ int main()
 	Point2f srcPoints[4];
 	Point2f dstPoints[4];
 	center_point.x = width / 2 + 30;
-	center_point.y = height / 2 - 20;
+	center_point.y = height / 2;
 	dstPoints[0] = Point2f(0, 0);
 	dstPoints[1] = Point2f(50, 0);
 	dstPoints[2] = Point2f(50, 50);
@@ -132,7 +132,7 @@ int main()
 		else
 			thresh = threshold(rMat, binary_image, 165, 255, THRESH_BINARY);	// 如果是红色
 
-																				//cout << thresh << endl;
+		//cout << thresh << endl;
 
 #ifdef DEBUG
 		imshow("bin", binary_image);
@@ -143,19 +143,24 @@ int main()
 		findContours(binary_clone, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
 
 		if (contours.size() < 3) {
-#ifdef DEBUG			
+#ifdef DEBUG
 			imshow("frame", frame);
 			key = (waitKey(10) & 255);
 			if (key == 27) break;
 			else if (key == 32) waitKey(0);
-#endif			
+#endif
 			continue;
 		}
 
 		vector<RotatedRect> contours_rotatedRect;
-		for (int i = 0; i < contours.size(); i++)
-			if (contourArea(contours[i]) > 5000)
+		for (int i = 0; i < contours.size(); i++) {
+			double area = contourArea(contours[i]);
+			if (area > 3000) {
+				cout << area << " ";
 				contours_rotatedRect.push_back(minAreaRect(contours[i]));
+			}
+		}
+		cout << endl;
 
 		for (int i = 0; i < contours_rotatedRect.size(); i++) {
 			vector<Point2f> p(4);
@@ -171,11 +176,14 @@ int main()
 			warpMat = getPerspectiveTransform(srcPoints, dstPoints);
 			warpPerspective(binary_image, dstImage, warpMat, dstImage.size());
 
-			circle(dstImage, Point(25, 25), 20, Scalar(0), -1);
+			circle(dstImage, Point(25, 25), 21, Scalar(0), -1);
 
-			if (countDifference(dstImage, mask0) < 500) {
+			int diff = countDifference(dstImage, mask0);
+			//cout << "diff----->" << diff << endl;
+			if (diff < 250) {
 #ifdef DEBUG
 				circle(frame, contours_rotatedRect[i].center, 4, Scalar(0, 255, 0), 2, 16);
+				cout << "detect_flag----->" << detect_flag <<endl;
 #endif
 				detect_point = contours_rotatedRect[i].center;
 				detect_flag = 1;
@@ -184,8 +192,13 @@ int main()
 			else
 			{
 				detect_flag = 0;
+				stop_flag = 0x00;
 			}
-			send_select(detect_flag);
+			
+			if (detect_flag) {
+				send_select(detect_flag);
+				break;
+			}
 		}
 #ifdef DEBUG
 		imshow("frame", frame);
@@ -210,7 +223,7 @@ void send_select(int flag)
 		//判断X方向
 		if (((y_stop == 1) || (y_stop == 2)) && (final_flag == 0))
 		{
-			if ((x_value <= 25) && (x_value >= -25))
+			if ((x_value <= 35) && (x_value >= -35))
 			{
 				x_stop = 1;
 				count_ = 1;
@@ -219,12 +232,12 @@ void send_select(int flag)
 					count_ = 2;
 				}
 			}
-			else if (x_value > 25)
+			else if (x_value > 35)
 			{
 				dir = LEFT;
 				x_stop = 0;
 			}
-			else if (x_value < -25)
+			else if (x_value < -35)
 			{
 				dir = RIGHT;
 				x_stop = 0;
@@ -233,37 +246,35 @@ void send_select(int flag)
 		//判断y方向
 		if ((x_stop) && (final_flag == 0))
 		{
-			if ((y_value <= 25) && (y_value >= -25))
+			if ((y_value <= 35) && (y_value >= -35))
 			{
 				y_stop = 2;
 			}
-			else if (y_value > 25)
+			else if (y_value > 35)
 			{
 
 				dir = BACK;
 				y_stop = 0;
 
 			}
-			else if (y_value < -25)
+			else if (y_value < -35)
 			{
 
 				dir = FROUNT;
 				y_stop = 0;
 			}
 		}
-		if ((x_value <= 25) && (x_value >= -25) && (y_value <= 25) && (y_value >= -25) && (count_ = 2))
+		if ((x_value <= 35) && (x_value >= -35) && (y_value <= 35) && (y_value >= -35) && (count_ = 2))
 		{
 			dir = DOWN;
-
 		}
-
-
 	}
 	else if (detect_flag != 1)
 	{
 		stop_flag = 0x00;//悬停模式
 		dir = 0x00;
 		speed = 0x00;
+//		return ;
 	}
 
 	if (dir == DOWN)
@@ -299,7 +310,7 @@ int countDifference(Mat mask, Mat mask0) {
 	for (int i = 0; i < 2500; i++) {
 		int a = mask.data[i];
 		int b = mask0.data[i];
-		if (a != b)
+		if ((a > 0 && b == 0) || (a == 0 && b > 0))
 			sum++;
 	}
 

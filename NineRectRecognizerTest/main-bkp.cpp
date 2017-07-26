@@ -4,7 +4,7 @@
 #include "serialsom.h"
 
 #define SEND				// 如需要串口发送，取消注释，使用妙算的 UART3 发送数据
-#define DEBUG
+//#define DEBUG
 
 const int Width = 800;		// 视频宽
 const int Height = 600;		// 视频高
@@ -246,7 +246,7 @@ int main(int argc, char** argv)
 
 		// 寻找所有轮廓
 		vector<vector<Point> > contours0;		// 所有轮廓
-		findContours(canny_img, contours0, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
+		findContours(canny_img, contours0, CV_RETR_CCOMP, CV_CHAIN_APPROX_SIMPLE);
 
 		// 先用面积约束，面积在指定范围内的轮廓的数量不满足要求时，进入下一帧
 		vector<vector<Point> > contours1;		// 面积在指定范围内的轮廓（九宫格区）
@@ -313,6 +313,30 @@ int main(int argc, char** argv)
 		vector<RotatedRect> contours_rotatedRect;
 		for (int i = 0; i < contours2.size(); i++)
 			contours_rotatedRect.push_back(minAreaRect(contours2[i]));
+		
+		// 去掉距离较近的 RotatedRect
+		vector<RotatedRect> rotatedRects;
+		for (int i = 0; i < contours_rotatedRect.size(); i++) {
+			if (i == 0) {
+				rotatedRects.push_back(contours_rotatedRect[0]);
+				continue;
+			}
+
+			for (int j = 0; j < rotatedRects.size(); j++) {
+				int _x = abs(contours_rotatedRect[i].center.x - rotatedRects[j].center.x);
+				int _y = abs(contours_rotatedRect[i].center.y - rotatedRects[j].center.y);
+				if (_x < 10 && _y < 10)  {
+					if (contours_rotatedRect[i].size.area() < contours_rotatedRect[j].size.area())
+						contours_rotatedRect[i] = contours_rotatedRect[j];
+					break;
+				}
+				if (j == (rotatedRects.size() - 1))
+					rotatedRects.push_back(contours_rotatedRect[i]);
+			}
+		}
+
+		contours_rotatedRect.clear();
+		contours_rotatedRect = rotatedRects;
 
 		// 如果旋转矩形的数量大于9，则做一些约束，角度，长宽比
 		if (contours_rotatedRect.size() > 9) {
@@ -332,7 +356,7 @@ int main(int argc, char** argv)
 					b1 = true;
 				}
 
-				if (tmp_float > 1.40 && tmp_float < 2.2) {
+				if (tmp_float > 1.5 && tmp_float < 2.2) {
 					b2 = true;
 				}
 
